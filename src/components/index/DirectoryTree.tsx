@@ -1,37 +1,93 @@
+import { useMemo, useState } from 'react'
+
 import type { TopicSummary } from '../../domain/algorithms/types.ts'
 
-const joinLabels = (labels: readonly string[]) => labels.join('   ')
+type SelectedEntry = Readonly<{
+  topicId: string
+  algorithmId: string
+}>
+
+const createEntryId = (topicId: string, algorithmId: string) =>
+  `${topicId}:${algorithmId}`
+
+const defaultSelectedEntry: SelectedEntry = {
+  topicId: 'topic-4',
+  algorithmId: 'dijkstra',
+}
 
 function DirectoryTree({ topics }: { topics: readonly TopicSummary[] }) {
+  const [selectedEntryId, setSelectedEntryId] = useState(
+    createEntryId(defaultSelectedEntry.topicId, defaultSelectedEntry.algorithmId),
+  )
+
+  const entryIds = useMemo(
+    () =>
+      topics.flatMap((topic) =>
+        topic.algorithms.map((algorithm) => createEntryId(topic.id, algorithm.id)),
+      ),
+    [topics],
+  )
+
+  const selectedIndex = Math.max(entryIds.indexOf(selectedEntryId), 0)
+
+  const selectByOffset = (offset: number) => {
+    if (entryIds.length === 0) {
+      return
+    }
+
+    const nextIndex = (selectedIndex + offset + entryIds.length) % entryIds.length
+    setSelectedEntryId(entryIds[nextIndex] ?? entryIds[0] ?? '')
+  }
+
   return (
-    <div className="rounded-sm border border-[#E5E5E5] bg-white">
-      <div className="border-b border-[#E5E5E5] px-5 py-4 font-mono text-sm text-[#111111]">
-        FIT2004: Algorithms and Data Structures
-      </div>
-      <div className="divide-y divide-[#E5E5E5]">
-        {topics.map((topic) => (
-          <section
-            key={topic.id}
-            className="group px-5 py-4 transition-colors duration-150 hover:bg-[#111111] hover:text-[#FAFAFA]"
-          >
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-sm">
-              <span className="text-[#999999] transition-colors group-hover:text-[#CCCCCC]">
-                {topic.shortLabel}
-              </span>
-              <h2 className="text-base font-medium">{topic.title}</h2>
-            </div>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#666666] transition-colors group-hover:text-[#D4D4D4]">
-              {topic.summary}
-            </p>
-            <p className="mt-3 font-mono text-sm leading-7">
-              <span className="text-[#666666] transition-colors group-hover:text-[#D4D4D4]">
-                -&gt;
-              </span>{' '}
-              {joinLabels(topic.algorithms.map((algorithm) => algorithm.label))}
-            </p>
-          </section>
-        ))}
-      </div>
+    <div
+      aria-label="Topic directory"
+      className="outline-none"
+      role="tree"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowDown') {
+          event.preventDefault()
+          selectByOffset(1)
+        }
+
+        if (event.key === 'ArrowUp') {
+          event.preventDefault()
+          selectByOffset(-1)
+        }
+      }}
+    >
+      {topics.map((topic) => (
+        <section key={topic.id} className="mb-7">
+          <h2 className="text-[1.15rem] font-semibold tracking-[-0.035em] text-[#111111] sm:text-[1.25rem]">
+            {topic.shortLabel}: {topic.title}
+          </h2>
+          <div className="mt-2 space-y-1">
+            {topic.algorithms.map((algorithm) => {
+              const entryId = createEntryId(topic.id, algorithm.id)
+              const isSelected = entryId === selectedEntryId
+
+              return (
+                <button
+                  key={algorithm.id}
+                  className={[
+                    'block w-full max-w-[640px] border-0 px-6 py-0.5 text-left font-mono text-[1.05rem] outline-none transition-colors',
+                    isSelected ? 'bg-[#111111] text-[#FAFAFA]' : 'bg-transparent text-[#111111] hover:bg-[#111111] hover:text-[#FAFAFA]',
+                  ].join(' ')}
+                  onFocus={() => setSelectedEntryId(entryId)}
+                  onMouseEnter={() => setSelectedEntryId(entryId)}
+                  type="button"
+                >
+                  <span className="inline-block min-w-[1.5rem]">
+                    {isSelected ? '>' : '->'}
+                  </span>
+                  <span>{algorithm.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   )
 }
