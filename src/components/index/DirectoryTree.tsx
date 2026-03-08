@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 
 import type { TopicSummary } from '../../domain/algorithms/types.ts'
 
-type SelectedEntry = Readonly<{
+type DirectorySelection = Readonly<{
   topicId: string
   algorithmId: string
 }>
@@ -10,12 +10,28 @@ type SelectedEntry = Readonly<{
 const createEntryId = (topicId: string, algorithmId: string) =>
   `${topicId}:${algorithmId}`
 
-const defaultSelectedEntry: SelectedEntry = {
-  topicId: 'topic-4',
-  algorithmId: 'dijkstra',
+const defaultSelectedEntry: DirectorySelection = {
+  topicId: 'topic-1',
+  algorithmId: 'complexity-analysis',
 }
 
-function DirectoryTree({ topics }: { topics: readonly TopicSummary[] }) {
+const parseEntryId = (entryId: string): DirectorySelection | null => {
+  const [topicId, algorithmId] = entryId.split(':')
+
+  if (topicId === undefined || algorithmId === undefined) {
+    return null
+  }
+
+  return { topicId, algorithmId }
+}
+
+function DirectoryTree({
+  topics,
+  onSelectEntry,
+}: {
+  topics: readonly TopicSummary[]
+  onSelectEntry?: (selection: DirectorySelection) => void
+}) {
   const [selectedEntryId, setSelectedEntryId] = useState(
     createEntryId(defaultSelectedEntry.topicId, defaultSelectedEntry.algorithmId),
   )
@@ -30,13 +46,25 @@ function DirectoryTree({ topics }: { topics: readonly TopicSummary[] }) {
 
   const selectedIndex = Math.max(entryIds.indexOf(selectedEntryId), 0)
 
+  const updateSelectedEntry = (entryId: string) => {
+    setSelectedEntryId(entryId)
+
+    const selection = parseEntryId(entryId)
+    if (selection !== null) {
+      onSelectEntry?.(selection)
+    }
+  }
+
   const selectByOffset = (offset: number) => {
     if (entryIds.length === 0) {
       return
     }
 
     const nextIndex = (selectedIndex + offset + entryIds.length) % entryIds.length
-    setSelectedEntryId(entryIds[nextIndex] ?? entryIds[0] ?? '')
+    const nextEntryId = entryIds[nextIndex] ?? entryIds[0]
+    if (nextEntryId !== undefined) {
+      updateSelectedEntry(nextEntryId)
+    }
   }
 
   return (
@@ -58,11 +86,14 @@ function DirectoryTree({ topics }: { topics: readonly TopicSummary[] }) {
       }}
     >
       {topics.map((topic) => (
-        <section key={topic.id} className="mb-7">
-          <h2 className="text-[1.15rem] font-semibold tracking-[-0.035em] text-[#111111] sm:text-[1.25rem]">
-            {topic.shortLabel}: {topic.title}
+        <section key={topic.id} className="mb-8">
+          <h2 className="font-mono text-[1rem] tracking-[-0.02em] text-[#111111] sm:text-[1.05rem]">
+            {topic.shortLabel} {topic.title}
           </h2>
-          <div className="mt-2 space-y-1">
+          <p className="mt-1 max-w-[720px] text-[0.92rem] leading-6 text-[#666666]">
+            {topic.summary}
+          </p>
+          <div className="mt-3 space-y-1">
             {topic.algorithms.map((algorithm) => {
               const entryId = createEntryId(topic.id, algorithm.id)
               const isSelected = entryId === selectedEntryId
@@ -71,11 +102,12 @@ function DirectoryTree({ topics }: { topics: readonly TopicSummary[] }) {
                 <button
                   key={algorithm.id}
                   className={[
-                    'block w-full max-w-[640px] border-0 px-6 py-0.5 text-left font-mono text-[1.05rem] outline-none transition-colors',
+                    'block w-full max-w-[720px] border-0 px-4 py-0.5 text-left font-mono text-[0.98rem] outline-none transition-colors',
                     isSelected ? 'bg-[#111111] text-[#FAFAFA]' : 'bg-transparent text-[#111111] hover:bg-[#111111] hover:text-[#FAFAFA]',
                   ].join(' ')}
-                  onFocus={() => setSelectedEntryId(entryId)}
-                  onMouseEnter={() => setSelectedEntryId(entryId)}
+                  onClick={() => updateSelectedEntry(entryId)}
+                  onFocus={() => updateSelectedEntry(entryId)}
+                  onMouseEnter={() => updateSelectedEntry(entryId)}
                   type="button"
                 >
                   <span className="inline-block min-w-[1.5rem]">
@@ -93,3 +125,4 @@ function DirectoryTree({ topics }: { topics: readonly TopicSummary[] }) {
 }
 
 export { DirectoryTree }
+export type { DirectorySelection }
