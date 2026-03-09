@@ -378,14 +378,11 @@ function Topic02StabilityLab() {
   }, [lastStepIndex, stepIndex])
 
   return (
-    <section className="mt-16 space-y-6">
+    <section className="mt-4 space-y-6">
       <div className="space-y-3">
         <div className="font-mono text-[0.86rem] tracking-[0.16em] text-[#666666]">
           TRACE / CONTENT / STABILITY / INSERTION VS SELECTION
         </div>
-        <h2 className="text-[clamp(1.8rem,3vw,2.5rem)] font-semibold tracking-[-0.04em] text-[#111111]">
-          Monochrome Poker-Card Stability Visualizer
-        </h2>
         <p className="max-w-[820px] text-[1rem] leading-7 text-[#666666]">
           Two lanes consume the same 8-card input and step together on a shared timeline.
           Insertion Sort preserves duplicate-key order; Selection Sort can break it when a

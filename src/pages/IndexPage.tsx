@@ -18,6 +18,7 @@ import { Topic02MergeSortLab } from '../components/topic-02/Topic02MergeSortLab.
 import { Topic02PartitionSelectionLab } from '../components/topic-02/Topic02PartitionSelectionLab.tsx'
 import { Topic02StabilityLab } from '../components/topic-02/Topic02StabilityLab.tsx'
 import { Topic03GraphLab } from '../components/topic-03/Topic03GraphLab.tsx'
+import { CommandPalette } from '../components/shell/CommandPalette.tsx'
 import { topicCatalog } from '../content/topics/topicCatalog.ts'
 import {
   quickselectStrategyOptions,
@@ -70,6 +71,9 @@ const topic03DirectoryLabelByView: Record<Topic03View, string> = {
   'dijkstra-algorithm': 'DIJKSTRA ALGORITHM',
   'bellman-ford-algorithm': 'BELLMAN FORD ALGORITHM',
   'floyd-warshall-algorithm': 'FLOYD WARSHALL ALGORITHM',
+  'prim-algorithm': 'PRIM ALGORITHM',
+  'kruskal-algorithm': 'KRUSKAL ALGORITHM',
+  'union-find': 'UNION FIND',
 }
 
 type ActiveScreen =
@@ -79,6 +83,7 @@ type ActiveScreen =
   | Readonly<{ kind: 'topic-3'; view: Topic03View }>
 
 const workbenchRouteMap: Readonly<Record<string, ActiveScreen>> = {
+  'menu:home': { kind: 'menu' },
   'topic-1:complexity-analysis': { kind: 'topic-1', view: 'complexity-analysis' },
   'topic-1:correctness-invariants': { kind: 'topic-1', view: 'correctness-invariants' },
   'topic-1:physical-machine-metaphor': { kind: 'topic-1', view: 'physical-machine-metaphor' },
@@ -101,6 +106,9 @@ const workbenchRouteMap: Readonly<Record<string, ActiveScreen>> = {
   'topic-3:dijkstra-algorithm': { kind: 'topic-3', view: 'dijkstra-algorithm' },
   'topic-3:bellman-ford-algorithm': { kind: 'topic-3', view: 'bellman-ford-algorithm' },
   'topic-3:floyd-warshall-algorithm': { kind: 'topic-3', view: 'floyd-warshall-algorithm' },
+  'topic-3:prim-algorithm': { kind: 'topic-3', view: 'prim-algorithm' },
+  'topic-3:kruskal-algorithm': { kind: 'topic-3', view: 'kruskal-algorithm' },
+  'topic-3:union-find': { kind: 'topic-3', view: 'union-find' },
 }
 
 const toRouteKey = (selection: DirectorySelection) =>
@@ -128,6 +136,12 @@ const isAdvancedSortView = (
   view: Topic02View,
 ): view is Topic02AdvancedSortAlgorithmId =>
   view === 'heapsort' || view === 'counting-sort' || view === 'radix-sort'
+
+const isEditableTarget = (target: EventTarget | null) =>
+  target instanceof HTMLInputElement ||
+  target instanceof HTMLTextAreaElement ||
+  target instanceof HTMLSelectElement ||
+  (target instanceof HTMLElement && target.isContentEditable)
 
 type PickerOption = Readonly<{
   id: string
@@ -287,6 +301,7 @@ function BreadcrumbDirectoryPicker({
 
 function IndexPage() {
   const [activeScreen, setActiveScreen] = useState<ActiveScreen>({ kind: 'menu' })
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
   const [quicksortVariant, setQuicksortVariant] = useState<QuicksortVariantId>('lomuto')
   const [quickselectStrategy, setQuickselectStrategy] =
     useState<QuickselectStrategyId>('lomuto')
@@ -309,6 +324,31 @@ function IndexPage() {
 
     setActiveScreen(nextScreen)
   }
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') {
+        return
+      }
+
+      if (isEditableTarget(event.target)) {
+        return
+      }
+
+      event.preventDefault()
+      setIsCommandPaletteOpen(true)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [activeScreen])
 
   const breadcrumbSuffixNode: ReactNode = useMemo(() => {
     if (activeScreen.kind === 'topic-1') {
@@ -367,46 +407,50 @@ function IndexPage() {
     return topic02DirectoryLabelByView[activeScreen.view]
   }, [activeScreen, quickselectStrategy, quicksortVariant])
 
+  const pageTitle = useMemo(() => {
+    if (activeScreen.kind === 'menu') {
+      return 'Topic Explorer'
+    }
+
+    if (activeScreen.kind === 'topic-1') {
+      return topic01DirectoryLabelByView[activeScreen.view]
+    }
+
+    if (activeScreen.kind === 'topic-3') {
+      return topic03DirectoryLabelByView[activeScreen.view]
+    }
+
+    if (activeScreen.view === 'quicksort') {
+      const selectedVariantLabel =
+        quicksortVariantOptions.find((option) => option.id === quicksortVariant)?.label ??
+        quicksortVariant
+      return `QUICKSORT / ${selectedVariantLabel.toUpperCase()}`
+    }
+
+    if (activeScreen.view === 'quickselect') {
+      const selectedStrategyLabel =
+        quickselectStrategyOptions.find((option) => option.id === quickselectStrategy)?.label ??
+        quickselectStrategy
+      return `QUICKSELECT / ${selectedStrategyLabel.toUpperCase()}`
+    }
+
+    return topic02DirectoryLabelByView[activeScreen.view]
+  }, [activeScreen, quickselectStrategy, quicksortVariant])
+
   return (
-    <section className="px-8 pb-20 pt-[7vh]">
+    <section className="px-8 pb-20 pt-8">
       <div className={['mx-auto', pageMaxWidthClass].join(' ')}>
         {activeScreen.kind === 'menu' ? (
-          <>
-            <div className="max-w-[780px]">
-              <div className="font-mono text-[0.92rem] tracking-[0.18em] text-[#666666]">
-                TRACE
-              </div>
-              <h1 className="mt-4 text-[clamp(3rem,6vw,5.2rem)] font-semibold tracking-[-0.06em] text-[#111111]">
-                TRACE
-              </h1>
-              <p className="mt-5 max-w-[720px] text-[1.05rem] leading-8 text-[#666666]">
-                Browse core algorithm ideas like a codebase, then inspect them from the inside
-                through step traces, asymptotic views, and machine-style diagnostics.
-              </p>
-            </div>
-
-            <div className="mt-10">
-              <DirectoryTree onSelectEntry={handleDirectorySelection} topics={topicCatalog} />
-            </div>
-          </>
+          <DirectoryTree onSelectEntry={handleDirectorySelection} topics={topicCatalog} />
         ) : (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="font-mono text-[0.86rem] tracking-[0.16em] text-[#666666]">
-                  TRACE / CONTENT / {breadcrumbSuffixNode}
-                </div>
-                <h1 className="mt-2 text-[clamp(2rem,4vw,3rem)] font-semibold tracking-[-0.04em] text-[#111111]">
-                  Topic Explorer
-                </h1>
+            <div>
+              <div className="font-mono text-[0.86rem] tracking-[0.16em] text-[#666666]">
+                TRACE / CONTENT / {breadcrumbSuffixNode}
               </div>
-              <button
-                className="border border-[#111111] bg-white px-3 py-2 font-mono text-[0.88rem] text-[#111111] transition-colors hover:bg-[#111111] hover:text-[#FAFAFA]"
-                onClick={() => setActiveScreen({ kind: 'menu' })}
-                type="button"
-              >
-                Back To Menu
-              </button>
+              <h1 className="mt-2 text-[clamp(2rem,4vw,3rem)] font-semibold tracking-[-0.04em] text-[#111111]">
+                {pageTitle}
+              </h1>
             </div>
 
             {activeScreen.kind === 'topic-1' ? (
@@ -437,6 +481,16 @@ function IndexPage() {
           </>
         )}
       </div>
+
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onSelect={(selection) => {
+          handleDirectorySelection(selection)
+          setIsCommandPaletteOpen(false)
+        }}
+        topics={topicCatalog}
+      />
     </section>
   )
 }

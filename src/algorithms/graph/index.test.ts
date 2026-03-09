@@ -275,6 +275,175 @@ describe('graph timeline algorithms', () => {
     expect(cycleFinal?.negativeCycleNodeIds?.length ?? 0).toBeGreaterThan(0)
   })
 
+  it("prim's algorithm returns connected MST with expected edge count and weight", () => {
+    const graph: GraphModel = {
+      nodes: [
+        { id: 'node-0', label: 'A', x: 0, y: 0, order: 0 },
+        { id: 'node-1', label: 'B', x: 0, y: 0, order: 1 },
+        { id: 'node-2', label: 'C', x: 0, y: 0, order: 2 },
+        { id: 'node-3', label: 'D', x: 0, y: 0, order: 3 },
+      ],
+      edges: [
+        { id: 'edge-a-b', from: 'node-0', to: 'node-1', weight: 1 },
+        { id: 'edge-a-c', from: 'node-0', to: 'node-2', weight: 4 },
+        { id: 'edge-b-c', from: 'node-1', to: 'node-2', weight: 2 },
+        { id: 'edge-b-d', from: 'node-1', to: 'node-3', weight: 5 },
+        { id: 'edge-c-d', from: 'node-2', to: 'node-3', weight: 3 },
+      ],
+    }
+
+    const timeline = createGraphTraversalTimeline({
+      algorithmId: 'prim-algorithm',
+      graph,
+      startNodeId: 'node-0',
+      scope: 'full-graph',
+    })
+
+    const finalFrame = getLastFrame(timeline.frames)
+    expect(finalFrame).toBeDefined()
+    expect(finalFrame?.isComplete).toBe(true)
+    expect(finalFrame?.mstEdgeIds?.length ?? 0).toBe(graph.nodes.length - 1)
+
+    const mstWeight = graph.edges
+      .filter((edge) => (finalFrame?.mstEdgeIds ?? []).includes(edge.id))
+      .reduce((accumulator, edge) => accumulator + edge.weight, 0)
+    expect(mstWeight).toBe(6)
+  })
+
+  it("prim's algorithm enforces connected-graph precondition", () => {
+    const graph: GraphModel = {
+      nodes: [
+        { id: 'node-0', label: 'A', x: 0, y: 0, order: 0 },
+        { id: 'node-1', label: 'B', x: 0, y: 0, order: 1 },
+        { id: 'node-2', label: 'C', x: 0, y: 0, order: 2 },
+      ],
+      edges: [
+        { id: 'edge-a-b', from: 'node-0', to: 'node-1', weight: 1 },
+      ],
+    }
+
+    const timeline = createGraphTraversalTimeline({
+      algorithmId: 'prim-algorithm',
+      graph,
+      startNodeId: 'node-0',
+      scope: 'full-graph',
+    })
+
+    const finalFrame = getLastFrame(timeline.frames)
+    expect(finalFrame).toBeDefined()
+    expect(finalFrame?.isComplete).toBe(true)
+    expect(finalFrame?.operationText.toLowerCase()).toContain('precondition failed')
+    expect(finalFrame?.mstEdgeIds ?? []).toEqual([])
+  })
+
+  it("kruskal's algorithm is deterministic and rejects cycle edges", () => {
+    const graph: GraphModel = {
+      nodes: [
+        { id: 'node-0', label: 'A', x: 0, y: 0, order: 0 },
+        { id: 'node-1', label: 'B', x: 0, y: 0, order: 1 },
+        { id: 'node-2', label: 'C', x: 0, y: 0, order: 2 },
+        { id: 'node-3', label: 'D', x: 0, y: 0, order: 3 },
+      ],
+      edges: [
+        { id: 'edge-a-b', from: 'node-0', to: 'node-1', weight: 1 },
+        { id: 'edge-a-c', from: 'node-0', to: 'node-2', weight: 1 },
+        { id: 'edge-b-c', from: 'node-1', to: 'node-2', weight: 1 },
+        { id: 'edge-b-d', from: 'node-1', to: 'node-3', weight: 2 },
+        { id: 'edge-c-d', from: 'node-2', to: 'node-3', weight: 2 },
+      ],
+    }
+
+    const timeline = createGraphTraversalTimeline({
+      algorithmId: 'kruskal-algorithm',
+      graph,
+      startNodeId: null,
+      scope: 'full-graph',
+    })
+
+    const finalFrame = getLastFrame(timeline.frames)
+    expect(finalFrame).toBeDefined()
+    expect(finalFrame?.isComplete).toBe(true)
+    expect(finalFrame?.mstEdgeIds?.length ?? 0).toBe(graph.nodes.length - 1)
+    expect(finalFrame?.edgeDecisionById?.['edge-b-c']).toBe('rejected')
+
+    const mstWeight = graph.edges
+      .filter((edge) => (finalFrame?.mstEdgeIds ?? []).includes(edge.id))
+      .reduce((accumulator, edge) => accumulator + edge.weight, 0)
+    expect(mstWeight).toBe(4)
+  })
+
+  it('union-find variants produce same partition; compression flattens and rank increments only on ties', () => {
+    const graph: GraphModel = {
+      nodes: [
+        { id: 'node-0', label: 'A', x: 0, y: 0, order: 0 },
+        { id: 'node-1', label: 'B', x: 0, y: 0, order: 1 },
+        { id: 'node-2', label: 'C', x: 0, y: 0, order: 2 },
+        { id: 'node-3', label: 'D', x: 0, y: 0, order: 3 },
+      ],
+      edges: [
+        { id: 'edge-a-b', from: 'node-0', to: 'node-1', weight: 1 },
+        { id: 'edge-b-c', from: 'node-1', to: 'node-2', weight: 1 },
+        { id: 'edge-c-d', from: 'node-2', to: 'node-3', weight: 1 },
+        { id: 'edge-a-d', from: 'node-0', to: 'node-3', weight: 2 },
+      ],
+    }
+
+    const baselineTimeline = createGraphTraversalTimeline({
+      algorithmId: 'union-find',
+      graph,
+      startNodeId: null,
+      unionFindMode: 'baseline',
+      scope: 'full-graph',
+    })
+    const compressionTimeline = createGraphTraversalTimeline({
+      algorithmId: 'union-find',
+      graph,
+      startNodeId: null,
+      unionFindMode: 'path-compression',
+      scope: 'full-graph',
+    })
+    const rankTimeline = createGraphTraversalTimeline({
+      algorithmId: 'union-find',
+      graph,
+      startNodeId: null,
+      unionFindMode: 'union-by-rank',
+      scope: 'full-graph',
+    })
+    const combinedTimeline = createGraphTraversalTimeline({
+      algorithmId: 'union-find',
+      graph,
+      startNodeId: null,
+      unionFindMode: 'combined',
+      scope: 'full-graph',
+    })
+
+    const baselineFinal = getLastFrame(baselineTimeline.frames)
+    const compressionFinal = getLastFrame(compressionTimeline.frames)
+    const rankFinal = getLastFrame(rankTimeline.frames)
+    const combinedFinal = getLastFrame(combinedTimeline.frames)
+
+    expect(baselineFinal).toBeDefined()
+    expect(compressionFinal).toBeDefined()
+    expect(rankFinal).toBeDefined()
+    expect(combinedFinal).toBeDefined()
+
+    const reps = (frame: typeof baselineFinal) => Object.values(frame?.ufRepresentativeByNodeId ?? {})
+    expect(new Set(reps(baselineFinal)).size).toBe(1)
+    expect(new Set(reps(compressionFinal)).size).toBe(1)
+    expect(new Set(reps(rankFinal)).size).toBe(1)
+    expect(new Set(reps(combinedFinal)).size).toBe(1)
+
+    const baselineParentA = baselineFinal?.ufParentByNodeId?.['node-0']
+    const compressedParentA = compressionFinal?.ufParentByNodeId?.['node-0']
+    const compressedRepA = compressionFinal?.ufRepresentativeByNodeId?.['node-0']
+    expect(baselineParentA).not.toBe(compressedParentA)
+    expect(compressedParentA).toBe(compressedRepA)
+
+    const rankValues = Object.values(rankFinal?.ufRankByNodeId ?? {})
+    expect(rankValues.filter((value) => value > 0)).toHaveLength(1)
+    expect(Math.max(...rankValues)).toBe(1)
+  })
+
   it('directed adjacency structures are asymmetric for one-way edges', () => {
     const graph: GraphModel = {
       nodes: [

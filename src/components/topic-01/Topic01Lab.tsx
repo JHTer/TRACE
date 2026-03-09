@@ -329,17 +329,12 @@ const createRecursionBars = (depth: number) =>
   })
 
 function SectionFrame({
-  heading,
   children,
 }: Readonly<{
-  heading: string
   children: ReactNode
 }>) {
   return (
     <section className="border border-[#E5E5E5] bg-white">
-      <div className="border-b border-[#E5E5E5] px-5 py-3">
-        <h3 className="font-mono text-[0.98rem] text-[#111111]">{heading}</h3>
-      </div>
       <div className="px-5 py-5">{children}</div>
     </section>
   )
@@ -370,7 +365,7 @@ function ComplexityAnalysisView() {
 
   return (
     <div className="space-y-6">
-      <SectionFrame heading="TRACE / Topic 01 / Complexity Analysis">
+      <SectionFrame>
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
           <div>
             <div className="overflow-hidden border border-[#E5E5E5] bg-[#FAFAFA] p-4">
@@ -538,7 +533,7 @@ function CorrectnessAndInvariantsView() {
 
   return (
     <div className="space-y-6">
-      <SectionFrame heading="TRACE / Topic 01 / Correctness and Invariants">
+      <SectionFrame>
         <div className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h4 className="text-[1.35rem] font-medium tracking-[-0.03em] text-[#111111]">
@@ -696,7 +691,7 @@ function PhysicalMachineMetaphorView() {
 
   return (
     <div className="space-y-6">
-      <SectionFrame heading="TRACE / Topic 01 / Physical Machine Metaphor">
+      <SectionFrame>
         <div className="space-y-6">
           <div className="flex flex-wrap items-center gap-2">
             {Object.entries(diagnosticAlgorithmLabels).map(([id, label]) => {
@@ -850,16 +845,13 @@ function Topic01Lab({
     topic01Views[0].summary
 
   return (
-    <section className="mt-16">
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
+    <section className="mt-4">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="font-mono text-[0.88rem] tracking-[0.16em] text-[#666666]">
             TOPIC 01
           </div>
-          <h2 className="mt-2 text-[clamp(1.8rem,3vw,2.5rem)] font-semibold tracking-[-0.04em] text-[#111111]">
-            Complexity and Correctness
-          </h2>
-          <p className="mt-3 max-w-[760px] text-[1rem] leading-7 text-[#666666]">
+          <p className="mt-2 max-w-[760px] text-[1rem] leading-7 text-[#666666]">
             Topic 01 works best as an explanation lab: compare asymptotic growth, inspect invariants
             step by step, and translate abstract complexity into visible CPU, stack, and auxiliary
             memory signals.

@@ -26,6 +26,7 @@ import type {
   GraphRepresentationFrame,
   GraphTraversalFrame,
   GraphTraversalScope,
+  UnionFindModeId,
 } from '../../domain/algorithms/types.ts'
 
 const canvasWidth = 960
@@ -36,17 +37,6 @@ const maxNodeCount = 20
 const doubleTapThresholdMs = 320
 const dragMoveThresholdPx = 5
 const deleteThresholdOffsetPx = nodeRadius / 2
-
-const algorithmDirectoryLabel: Record<GraphAlgorithmId, string> = {
-  'graph-representation': 'GRAPH REPRESENTATION',
-  'breadth-first-search': 'BREADTH FIRST SEARCH',
-  'depth-first-search': 'DEPTH FIRST SEARCH',
-  'connected-components': 'CONNECTED COMPONENTS',
-  'topological-sorting': 'TOPOLOGICAL SORTING',
-  'dijkstra-algorithm': 'DIJKSTRA ALGORITHM',
-  'bellman-ford-algorithm': 'BELLMAN FORD ALGORITHM',
-  'floyd-warshall-algorithm': 'FLOYD WARSHALL ALGORITHM',
-}
 
 const algorithmSubtitle: Record<GraphAlgorithmId, string> = {
   'graph-representation':
@@ -65,6 +55,12 @@ const algorithmSubtitle: Record<GraphAlgorithmId, string> = {
     'Edge-relaxation dynamic programming with textbook negative-cycle influence propagation to -INF.',
   'floyd-warshall-algorithm':
     'All-pairs shortest paths via k,i,j dynamic programming with diagonal negative-cycle detection.',
+  'prim-algorithm':
+    'Greedy MST growth from root r using minimum key edges, aligned to textbook Algorithm 40.',
+  'kruskal-algorithm':
+    'Sort edges by weight and use Union-Find cycle checks to build a minimum spanning tree.',
+  'union-find':
+    'Disjoint-set forest with baseline, path compression, union-by-rank, and combined variants.',
 }
 
 type CanvasPoint = Readonly<{
@@ -206,6 +202,27 @@ const floydWarshallSampleGraph: GraphModel = {
   ],
 }
 
+const mstSampleGraph: GraphModel = {
+  nodes: [
+    { id: 'node-0', label: 'A', x: 150, y: 130, order: 0 },
+    { id: 'node-1', label: 'B', x: 350, y: 90, order: 1 },
+    { id: 'node-2', label: 'C', x: 560, y: 140, order: 2 },
+    { id: 'node-3', label: 'D', x: 240, y: 300, order: 3 },
+    { id: 'node-4', label: 'E', x: 460, y: 300, order: 4 },
+    { id: 'node-5', label: 'F', x: 700, y: 250, order: 5 },
+  ],
+  edges: [
+    { id: 'edge-node-0-node-1', from: 'node-0', to: 'node-1', weight: 3 },
+    { id: 'edge-node-0-node-3', from: 'node-0', to: 'node-3', weight: 2 },
+    { id: 'edge-node-1-node-2', from: 'node-1', to: 'node-2', weight: 4 },
+    { id: 'edge-node-1-node-4', from: 'node-1', to: 'node-4', weight: 6 },
+    { id: 'edge-node-2-node-5', from: 'node-2', to: 'node-5', weight: 5 },
+    { id: 'edge-node-3-node-4', from: 'node-3', to: 'node-4', weight: 1 },
+    { id: 'edge-node-4-node-5', from: 'node-4', to: 'node-5', weight: 2 },
+    { id: 'edge-node-2-node-4', from: 'node-2', to: 'node-4', weight: 3 },
+  ],
+}
+
 const sampleGraphByAlgorithmId: Record<GraphAlgorithmId, GraphModel> = {
   'graph-representation': defaultGraph,
   'breadth-first-search': defaultGraph,
@@ -215,6 +232,9 @@ const sampleGraphByAlgorithmId: Record<GraphAlgorithmId, GraphModel> = {
   'dijkstra-algorithm': dijkstraSampleGraph,
   'bellman-ford-algorithm': bellmanFordSampleGraph,
   'floyd-warshall-algorithm': floydWarshallSampleGraph,
+  'prim-algorithm': mstSampleGraph,
+  'kruskal-algorithm': mstSampleGraph,
+  'union-find': mstSampleGraph,
 }
 
 const isEditableTarget = (target: EventTarget | null) =>
@@ -385,12 +405,15 @@ const removeEdge = (graph: GraphModel, edgeId: string): GraphModel => ({
   edges: graph.edges.filter((edge) => edge.id !== edgeId),
 })
 
+const compareLabels = (left: string, right: string) =>
+  left.localeCompare(right, 'en-US', {
+    numeric: true,
+    sensitivity: 'base',
+  })
+
 const sortedNodesByLabel = (nodes: readonly GraphNode[]) =>
   [...nodes].sort((left, right) =>
-    left.label.localeCompare(right.label, 'en-US', {
-      numeric: true,
-      sensitivity: 'base',
-    }),
+    compareLabels(left.label, right.label),
   )
 
 const formatQueueOrStack = (
@@ -424,6 +447,7 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
   const [targetNodeId, setTargetNodeId] = useState<string | null>(
     initialSampleGraph.nodes[5]?.id ?? null,
   )
+  const [unionFindMode, setUnionFindMode] = useState<UnionFindModeId>('combined')
   const [edgeWeightInput, setEdgeWeightInput] = useState('1')
   const [dragState, setDragState] = useState<DragState | null>(null)
   const [pendingEdge, setPendingEdge] = useState<PendingEdgeState | null>(null)
@@ -439,14 +463,20 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
   const isDijkstraAlgorithm = algorithmId === 'dijkstra-algorithm'
   const isBellmanFordAlgorithm = algorithmId === 'bellman-ford-algorithm'
   const isFloydWarshallAlgorithm = algorithmId === 'floyd-warshall-algorithm'
-  const isWeightedPathAlgorithm =
+  const isPrimAlgorithm = algorithmId === 'prim-algorithm'
+  const isKruskalAlgorithm = algorithmId === 'kruskal-algorithm'
+  const isUnionFindAlgorithm = algorithmId === 'union-find'
+  const isMstAlgorithm = isPrimAlgorithm || isKruskalAlgorithm
+  const isDirectedWeightedPathAlgorithm =
     isDijkstraAlgorithm || isBellmanFordAlgorithm || isFloydWarshallAlgorithm
+  const isWeightedShortestPathAlgorithm = isDirectedWeightedPathAlgorithm
   const showsStartSelector =
-    isBfsAlgorithm || isDfsAlgorithm || isDijkstraAlgorithm || isBellmanFordAlgorithm
+    isBfsAlgorithm || isDfsAlgorithm || isDijkstraAlgorithm || isBellmanFordAlgorithm || isPrimAlgorithm
   const showsTargetSelector = isBfsAlgorithm || isDijkstraAlgorithm
   const isRepresentationAlgorithm = algorithmId === 'graph-representation'
-  const isDirectedGraphMode = isTopologicalSortAlgorithm || isWeightedPathAlgorithm
-  const isWeightedGraphMode = isWeightedPathAlgorithm
+  const isDirectedGraphMode = isTopologicalSortAlgorithm || isDirectedWeightedPathAlgorithm
+  const isWeightedGraphMode =
+    isWeightedShortestPathAlgorithm || isMstAlgorithm || isUnionFindAlgorithm
   const isPlaybackLocked = isTraversalAlgorithm && (isPlaying || lineEventIndex > 0)
 
   const representationTimeline = useMemo(
@@ -463,9 +493,10 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
             graph,
             startNodeId,
             targetNodeId,
+            unionFindMode,
             scope: traversalScope,
           }),
-    [algorithmId, graph, isTraversalAlgorithm, startNodeId, targetNodeId, traversalScope],
+    [algorithmId, graph, isTraversalAlgorithm, startNodeId, targetNodeId, traversalScope, unionFindMode],
   )
 
   const timelineFrames = useMemo(() => {
@@ -612,7 +643,7 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
   useEffect(() => {
     setIsPlaying(false)
     setLineEventIndex(0)
-  }, [algorithmId, graph, startNodeId, targetNodeId, traversalScope])
+  }, [algorithmId, graph, startNodeId, targetNodeId, traversalScope, unionFindMode])
 
   useEffect(() => {
     if (!isPlaybackLocked) {
@@ -1135,6 +1166,14 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
   const currentK = traversalFrame?.currentK ?? null
   const currentI = traversalFrame?.currentI ?? null
   const currentJ = traversalFrame?.currentJ ?? null
+  const mstEdgeIds = new Set(traversalFrame?.mstEdgeIds ?? traversalFrame?.traversalTreeEdgeIds ?? [])
+  const edgeDecisionById = traversalFrame?.edgeDecisionById ?? {}
+  const ufParentByNodeId = traversalFrame?.ufParentByNodeId ?? null
+  const ufRankByNodeId = traversalFrame?.ufRankByNodeId ?? null
+  const ufRepresentativeByNodeId = traversalFrame?.ufRepresentativeByNodeId ?? null
+  const ufMode = traversalFrame?.ufMode ?? unionFindMode
+  const sortedEdgeIds = traversalFrame?.sortedEdgeIds ?? []
+  const currentSortedEdgeId = traversalFrame?.currentEdgeId ?? null
 
   const pendingEdgeSourceNode =
     pendingEdge === null ? null : getNodeById(graph, pendingEdge.sourceNodeId)
@@ -1148,6 +1187,30 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
   const finalHighlightedNodeIds = useMemo(() => {
     if (!isTraversalAlgorithm || traversalFrame?.isComplete !== true) {
       return new Set<string>()
+    }
+
+    if (isPrimAlgorithm || isKruskalAlgorithm) {
+      if (mstEdgeIds.size === 0) {
+        return new Set(traversalFrame.discoveredNodeIds)
+      }
+
+      const highlightedNodeIds = new Set<string>()
+      displayGraph.edges.forEach((edge) => {
+        if (!mstEdgeIds.has(edge.id)) {
+          return
+        }
+        highlightedNodeIds.add(edge.from)
+        highlightedNodeIds.add(edge.to)
+      })
+      return highlightedNodeIds
+    }
+
+    if (isUnionFindAlgorithm) {
+      const representativeKeys = Object.keys(ufRepresentativeByNodeId ?? {})
+      if (representativeKeys.length > 0) {
+        return new Set(representativeKeys)
+      }
+      return new Set(displayGraph.nodes.map((node) => node.id))
     }
 
     if (isBfsAlgorithm || isDijkstraAlgorithm) {
@@ -1175,16 +1238,36 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
     return new Set<string>()
   }, [
     displayGraph.nodes,
+    displayGraph.edges,
     isBellmanFordAlgorithm,
     isBfsAlgorithm,
     isDijkstraAlgorithm,
     isFloydWarshallAlgorithm,
+    isKruskalAlgorithm,
+    isPrimAlgorithm,
     isTraversalAlgorithm,
+    isUnionFindAlgorithm,
+    mstEdgeIds,
     traversalFrame,
+    ufRepresentativeByNodeId,
   ])
   const finalHighlightedEdgeIds = useMemo(() => {
     if (!isTraversalAlgorithm || traversalFrame?.isComplete !== true) {
       return new Set<string>()
+    }
+
+    if (isPrimAlgorithm || isKruskalAlgorithm) {
+      return new Set(traversalFrame.mstEdgeIds ?? traversalFrame.traversalTreeEdgeIds)
+    }
+
+    if (isUnionFindAlgorithm) {
+      const edgeIds = new Set<string>()
+      displayGraph.edges.forEach((edge) => {
+        if (edgeDecisionById[edge.id] === 'accepted') {
+          edgeIds.add(edge.id)
+        }
+      })
+      return edgeIds
     }
 
     if (isBfsAlgorithm || isDijkstraAlgorithm) {
@@ -1230,7 +1313,11 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
     isBfsAlgorithm,
     isDijkstraAlgorithm,
     isFloydWarshallAlgorithm,
+    isKruskalAlgorithm,
+    isPrimAlgorithm,
     isTraversalAlgorithm,
+    isUnionFindAlgorithm,
+    edgeDecisionById,
     traversalFrame,
   ])
   const hasFinalResultFocus =
@@ -1260,16 +1347,68 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
     dijkstraNegativeEdge === null
   const canResetTraversal = isTraversalAlgorithm && (isPlaying || lineEventIndex > 0)
   const areTraversalSelectorsDisabled = !hasNodes || isPlaybackLocked
+  const edgeById = useMemo(
+    () =>
+      displayGraph.edges.reduce<Record<string, (typeof displayGraph.edges)[number]>>((accumulator, edge) => {
+        accumulator[edge.id] = edge
+        return accumulator
+      }, {}),
+    [displayGraph.edges],
+  )
+  const sortedEdgesForPanel = useMemo(
+    () =>
+      sortedEdgeIds
+        .map((edgeId) => edgeById[edgeId])
+        .filter((edge): edge is (typeof displayGraph.edges)[number] => edge !== undefined),
+    [edgeById, sortedEdgeIds, displayGraph.edges],
+  )
+  const mstEdgesForPanel = useMemo(
+    () =>
+      [...mstEdgeIds]
+        .map((edgeId) => edgeById[edgeId])
+        .filter((edge): edge is (typeof displayGraph.edges)[number] => edge !== undefined)
+        .sort((left, right) => compareLabels(left.id, right.id)),
+    [edgeById, mstEdgeIds, displayGraph.edges],
+  )
+  const ufGroups = useMemo(() => {
+    if (ufRepresentativeByNodeId === null) {
+      return []
+    }
+
+    const groupsByRepresentative: Record<string, string[]> = {}
+    Object.entries(ufRepresentativeByNodeId).forEach(([nodeId, representativeId]) => {
+      if (groupsByRepresentative[representativeId] === undefined) {
+        groupsByRepresentative[representativeId] = []
+      }
+      groupsByRepresentative[representativeId]?.push(nodeId)
+    })
+
+    return Object.entries(groupsByRepresentative)
+      .map(([representativeId, nodeIds]) => ({
+        representativeId,
+        nodeIds: [...nodeIds].sort((left, right) =>
+          compareLabels(labelByNodeId[left] ?? left, labelByNodeId[right] ?? right),
+        ),
+      }))
+      .sort((left, right) =>
+        compareLabels(
+          labelByNodeId[left.representativeId] ?? left.representativeId,
+          labelByNodeId[right.representativeId] ?? right.representativeId,
+        ),
+      )
+  }, [labelByNodeId, ufRepresentativeByNodeId])
+  const unionFindComplexityLabel =
+    ufMode === 'path-compression'
+      ? 'O(m log(n)) with path compression'
+      : ufMode === 'union-by-rank'
+        ? 'O(m log(n)) with union by rank'
+        : ufMode === 'combined'
+          ? 'O(m α(n)) with both optimisations'
+          : 'without optimisations: can degrade to O(n) FIND'
 
   return (
-    <section className="mt-16 space-y-2">
+    <section className="mt-4 space-y-2">
       <div className="space-y-2">
-        <div className="font-mono text-[0.86rem] tracking-[0.16em] text-[#666666]">
-          TRACE / CONTENT / {algorithmDirectoryLabel[algorithmId]} / GRAPH WORKBENCH
-        </div>
-        <h2 className="text-[clamp(1.7rem,3.2vw,2.45rem)] font-semibold tracking-[-0.04em] text-[#111111]">
-          {algorithmDirectoryLabel[algorithmId]}
-        </h2>
         <p className="max-w-[760px] text-[0.98rem] leading-7 text-[#666666]">
           {algorithmSubtitle[algorithmId]}
         </p>
@@ -1324,15 +1463,26 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
                       </label>
                     ) : null}
                   </>
-                ) : (
-                  <div className="border border-[#E5E5E5] bg-[#FAFAFA] px-2 py-1.5 font-mono text-[0.74rem] text-[#666666]">
-                    {isConnectedComponentsAlgorithm
-                      ? 'Connected-components runs on the full undirected graph.'
-                      : isTopologicalSortAlgorithm
-                        ? 'Topological sort runs on a directed graph (DAG required).'
-                        : 'All-pairs shortest paths run on directed weighted graphs.'}
-                  </div>
-                )}
+                ) : null}
+                {isUnionFindAlgorithm ? (
+                  <label className="w-[176px] text-[0.74rem] text-[#666666]">
+                    <span className="mb-1 block font-mono tracking-[0.08em]">Union-Find Mode</span>
+                    <select
+                      className="w-full border border-[#E5E5E5] bg-white px-2 py-1.5 font-mono text-[0.8rem] text-[#111111] disabled:cursor-not-allowed disabled:bg-[#F4F4F4] disabled:text-[#999999]"
+                      disabled={areTraversalSelectorsDisabled}
+                      onChange={(event) => {
+                        const nextMode = event.target.value as UnionFindModeId
+                        setUnionFindMode(nextMode)
+                      }}
+                      value={unionFindMode}
+                    >
+                      <option value="baseline">Baseline (Alg 34)</option>
+                      <option value="path-compression">Path Compression (Alg 35)</option>
+                      <option value="union-by-rank">Union by Rank (Alg 36)</option>
+                      <option value="combined">Combined</option>
+                    </select>
+                  </label>
+                ) : null}
               </div>
 
               <div className="flex flex-wrap items-center justify-start gap-1 lg:justify-center">
@@ -1453,11 +1603,11 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
 
               <section className="border-t border-[#E5E5E5] px-2 py-2">
                 <div className="font-mono text-[0.74rem] tracking-[0.08em] text-[#666666]">EXECUTION LOG</div>
-                <div className="mt-2 bg-[#FAFAFA] px-2 py-1.5 font-mono text-[0.8rem] text-[#111111]">
-                  {isPlaybackLocked
-                    ? activeFrame.operationText
-                    : 'Edit-ready: canvas unlocked. Press Play or Space to begin traversal.'}
-                </div>
+                {isPlaybackLocked ? (
+                  <div className="mt-2 bg-[#FAFAFA] px-2 py-1.5 font-mono text-[0.8rem] text-[#111111]">
+                    {activeFrame.operationText}
+                  </div>
+                ) : null}
 
                 <div className="mt-2 text-[0.76rem] text-[#666666]">
                   {showsStartSelector ? (
@@ -1610,8 +1760,12 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
                     <div>
                       {isTopologicalSortAlgorithm
                         ? 'edge: directed / DFS-tree / active'
-                        : isWeightedGraphMode
-                          ? 'edge: directed weighted / relaxed / final-result'
+                        : isMstAlgorithm
+                          ? 'edge: weighted undirected / MST / final-result'
+                          : isUnionFindAlgorithm
+                            ? 'edge: weighted undirected / LINK decision / final-result'
+                            : isWeightedGraphMode
+                              ? 'edge: directed weighted / relaxed / final-result'
                         : isBfsAlgorithm
                           ? 'edge: default / tree / shortest-path'
                           : 'edge: default / tree / active'}
@@ -2071,7 +2225,181 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
                     </div>
                   </div>
                 </section>
-              ) : isWeightedPathAlgorithm ? (
+              ) : isMstAlgorithm ? (
+                <section className="border-t border-[#E5E5E5] grid xl:grid-cols-2">
+                  <div className="px-2 py-2">
+                    <div className="font-mono text-[0.74rem] tracking-[0.08em] text-[#666666]">
+                      {isPrimAlgorithm ? 'PRIORITY QUEUE' : 'SORTED EDGES'}
+                    </div>
+                    <div className="mt-2 bg-[#FAFAFA] px-2 py-1.5 font-mono text-[0.82rem] text-[#111111]">
+                      {isPrimAlgorithm
+                        ? priorityQueueEntries.length === 0
+                          ? '[]'
+                          : `[${priorityQueueEntries
+                              .map((entry) => {
+                                const keyLabel = Number.isFinite(entry.key) ? `${entry.key}` : 'INF'
+                                return `${labelByNodeId[entry.nodeId] ?? entry.nodeId}:${keyLabel}`
+                              })
+                              .join(', ')}]`
+                        : sortedEdgesForPanel.length === 0
+                          ? '(none)'
+                          : sortedEdgesForPanel
+                              .map((edge) => {
+                                const decision = edgeDecisionById[edge.id] ?? 'pending'
+                                const prefix = decision === 'accepted' ? '[+]' : decision === 'rejected' ? '[-]' : '[ ]'
+                                return `${prefix} ${labelByNodeId[edge.from] ?? edge.from}-${labelByNodeId[edge.to] ?? edge.to}(${edge.weight})`
+                              })
+                              .join(' | ')}
+                    </div>
+
+                    <div className="mt-2 text-[0.74rem] text-[#666666]">
+                      <div className="border-t border-[#E5E5E5] px-1 py-1 font-mono">
+                        discovered: {formatQueueOrStack(traversalFrame.discoveredNodeIds, labelByNodeId)}
+                      </div>
+                      <div className="border-t border-[#E5E5E5] px-1 py-1 font-mono">
+                        mst edges: {mstEdgeIds.size}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-[#E5E5E5] px-2 py-2 xl:border-l xl:border-t-0 xl:border-[#E5E5E5]">
+                    {isKruskalAlgorithm && ufParentByNodeId !== null ? (
+                      <>
+                        <div className="font-mono text-[0.74rem] tracking-[0.08em] text-[#666666]">DISJOINT-SET STATE</div>
+                        <div className="mt-2 overflow-x-auto">
+                          <table className="min-w-full border-collapse font-mono text-[0.74rem]">
+                            <thead>
+                              <tr className="bg-[#FAFAFA] text-[#666666]">
+                                <th className="border border-[#E5E5E5] px-2 py-1 text-left">node</th>
+                                <th className="border border-[#E5E5E5] px-2 py-1 text-left">parent</th>
+                                <th className="border border-[#E5E5E5] px-2 py-1 text-left">rank</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {orderedNodes.map((node) => (
+                                <tr key={`mst-dsu-row-${node.id}`}>
+                                  <td className="border border-[#E5E5E5] px-2 py-1 text-[#111111]">{node.label}</td>
+                                  <td className="border border-[#E5E5E5] px-2 py-1 text-[#111111]">
+                                    {labelByNodeId[ufParentByNodeId[node.id] ?? node.id] ?? ufParentByNodeId[node.id] ?? '-'}
+                                  </td>
+                                  <td className="border border-[#E5E5E5] px-2 py-1 text-[#111111]">
+                                    {ufRankByNodeId?.[node.id] ?? 0}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    ) : null}
+
+                    <div className="mt-2 font-mono text-[0.74rem] tracking-[0.08em] text-[#666666]">MST EDGE SET</div>
+                    <div className="mt-2 overflow-x-auto">
+                      <table className="min-w-full border-collapse font-mono text-[0.74rem]">
+                        <thead>
+                          <tr className="bg-[#FAFAFA] text-[#666666]">
+                            <th className="border border-[#E5E5E5] px-2 py-1 text-left">edge</th>
+                            <th className="border border-[#E5E5E5] px-2 py-1 text-left">weight</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {mstEdgesForPanel.length === 0 ? (
+                            <tr>
+                              <td className="border border-[#E5E5E5] px-2 py-1 text-[#666666]" colSpan={2}>
+                                (none)
+                              </td>
+                            </tr>
+                          ) : (
+                            mstEdgesForPanel.map((edge) => (
+                              <tr key={`mst-edge-row-${edge.id}`}>
+                                <td className="border border-[#E5E5E5] px-2 py-1 text-[#111111]">
+                                  {labelByNodeId[edge.from] ?? edge.from} - {labelByNodeId[edge.to] ?? edge.to}
+                                </td>
+                                <td className="border border-[#E5E5E5] px-2 py-1 text-[#111111]">{edge.weight}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </section>
+              ) : isUnionFindAlgorithm ? (
+                <section className="border-t border-[#E5E5E5] grid xl:grid-cols-2">
+                  <div className="px-2 py-2">
+                    <div className="font-mono text-[0.74rem] tracking-[0.08em] text-[#666666]">MODE + COMPLEXITY</div>
+                    <div className="mt-2 bg-[#FAFAFA] px-2 py-1.5 font-mono text-[0.82rem] text-[#111111]">
+                      mode: {ufMode}
+                    </div>
+                    <div className="mt-1 bg-[#FAFAFA] px-2 py-1.5 font-mono text-[0.78rem] text-[#111111]">
+                      {unionFindComplexityLabel}
+                    </div>
+
+                    <div className="mt-2 font-mono text-[0.74rem] tracking-[0.08em] text-[#666666]">LINK ORDER</div>
+                    <div className="mt-1 max-h-[180px] overflow-y-auto border border-[#E5E5E5] bg-[#FAFAFA] px-2 py-1.5 font-mono text-[0.74rem] text-[#111111]">
+                      {sortedEdgesForPanel.length === 0 ? (
+                        <div>(none)</div>
+                      ) : (
+                        sortedEdgesForPanel.map((edge) => {
+                          const decision = edgeDecisionById[edge.id] ?? 'pending'
+                          const marker = decision === 'accepted' ? '+' : decision === 'rejected' ? '-' : '.'
+                          const isCurrent = edge.id === currentSortedEdgeId
+                          return (
+                            <div key={`uf-edge-status-${edge.id}`} className={isCurrent ? 'font-semibold' : 'font-normal'}>
+                              {marker} {labelByNodeId[edge.from] ?? edge.from}-{labelByNodeId[edge.to] ?? edge.to} ({edge.weight})
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-[#E5E5E5] px-2 py-2 xl:border-l xl:border-t-0 xl:border-[#E5E5E5]">
+                    <div className="font-mono text-[0.74rem] tracking-[0.08em] text-[#666666]">PARENT / RANK TABLE</div>
+                    <div className="mt-2 overflow-x-auto">
+                      <table className="min-w-full border-collapse font-mono text-[0.74rem]">
+                        <thead>
+                          <tr className="bg-[#FAFAFA] text-[#666666]">
+                            <th className="border border-[#E5E5E5] px-2 py-1 text-left">node</th>
+                            <th className="border border-[#E5E5E5] px-2 py-1 text-left">parent</th>
+                            <th className="border border-[#E5E5E5] px-2 py-1 text-left">rank</th>
+                            <th className="border border-[#E5E5E5] px-2 py-1 text-left">rep</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {orderedNodes.map((node) => (
+                            <tr key={`uf-parent-row-${node.id}`}>
+                              <td className="border border-[#E5E5E5] px-2 py-1 text-[#111111]">{node.label}</td>
+                              <td className="border border-[#E5E5E5] px-2 py-1 text-[#111111]">
+                                {labelByNodeId[ufParentByNodeId?.[node.id] ?? node.id] ?? ufParentByNodeId?.[node.id] ?? '-'}
+                              </td>
+                              <td className="border border-[#E5E5E5] px-2 py-1 text-[#111111]">
+                                {ufRankByNodeId?.[node.id] ?? 0}
+                              </td>
+                              <td className="border border-[#E5E5E5] px-2 py-1 text-[#111111]">
+                                {labelByNodeId[ufRepresentativeByNodeId?.[node.id] ?? node.id] ?? ufRepresentativeByNodeId?.[node.id] ?? '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="mt-2 font-mono text-[0.74rem] tracking-[0.08em] text-[#666666]">REPRESENTATIVE GROUPS</div>
+                    <div className="mt-1 border border-[#E5E5E5] bg-[#FAFAFA] px-2 py-1.5 font-mono text-[0.74rem] text-[#111111]">
+                      {ufGroups.length === 0
+                        ? '(none)'
+                        : ufGroups
+                            .map((group) => {
+                              const representativeLabel = labelByNodeId[group.representativeId] ?? group.representativeId
+                              const members = group.nodeIds.map((nodeId) => labelByNodeId[nodeId] ?? nodeId).join(', ')
+                              return `${representativeLabel}: [${members}]`
+                            })
+                            .join(' | ')}
+                    </div>
+                  </div>
+                </section>
+              ) : isWeightedShortestPathAlgorithm ? (
                 <section className="border-t border-[#E5E5E5] grid xl:grid-cols-2">
                   <div className="px-2 py-2">
                     <div className="font-mono text-[0.74rem] tracking-[0.08em] text-[#666666]">

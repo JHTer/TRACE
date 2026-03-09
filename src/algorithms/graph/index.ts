@@ -13,6 +13,7 @@ import type {
   GraphTraversalScope,
   GraphTraversalTimeline,
   LineEvent,
+  UnionFindModeId,
 } from '../../domain/algorithms/types.ts'
 
 type FrameWithExecutedLines = Readonly<{
@@ -132,6 +133,73 @@ const floydWarshallPseudocodeLines: readonly GraphPseudocodeLine[] = [
   { lineNumber: 9, text: '  return dist' },
 ]
 
+const primPseudocodeLines: readonly GraphPseudocodeLine[] = [
+  { lineNumber: 1, text: 'PRIM(G = (V, E), r)' },
+  { lineNumber: 2, text: '  dist[1..n] <- INF' },
+  { lineNumber: 3, text: '  parent[1..n] <- null' },
+  { lineNumber: 4, text: '  T <- ({r}, ∅)' },
+  { lineNumber: 5, text: '  dist[r] <- 0' },
+  { lineNumber: 6, text: '  Q <- priority_queue(V[1..n], key(v) = dist[v])' },
+  { lineNumber: 7, text: '  while Q is not empty do' },
+  { lineNumber: 8, text: '    u <- Q.pop_min()' },
+  { lineNumber: 9, text: '    T.add_vertex(u)' },
+  { lineNumber: 10, text: '    T.add_edge(parent[u], u)' },
+  { lineNumber: 11, text: '    for each edge e = (u, v) adjacent to u do' },
+  { lineNumber: 12, text: '      if not v ∈ T and dist[v] > w(u, v) then' },
+  { lineNumber: 13, text: '        // Remember to update the key of v in the priority queue!' },
+  { lineNumber: 14, text: '        dist[v] <- w(u, v)' },
+  { lineNumber: 15, text: '        parent[v] <- u' },
+  { lineNumber: 16, text: '  return T' },
+]
+
+const kruskalPseudocodeLines: readonly GraphPseudocodeLine[] = [
+  { lineNumber: 1, text: 'KRUSKAL(G = (V, E))' },
+  { lineNumber: 2, text: '  sort(E, key((u, v)) = w(u, v)) // ascending weight' },
+  { lineNumber: 3, text: '  forest <- UnionFind.initialise(n)' },
+  { lineNumber: 4, text: '  T <- (V, ∅)' },
+  { lineNumber: 5, text: '  for each edge (u, v) in E do' },
+  { lineNumber: 6, text: '    if forest.FIND(u) != forest.FIND(v) then' },
+  { lineNumber: 7, text: '      forest.UNION(u, v)' },
+  { lineNumber: 8, text: '      T.add_edge(u, v)' },
+  { lineNumber: 9, text: '  return T' },
+]
+
+const unionFindBaselinePseudocodeLines: readonly GraphPseudocodeLine[] = [
+  { lineNumber: 1, text: 'INITIALISE(n)' },
+  { lineNumber: 2, text: '  parent[1..n] <- 1..n' },
+  { lineNumber: 3, text: 'FIND(x)' },
+  { lineNumber: 4, text: '  if parent[x] = x then return x' },
+  { lineNumber: 5, text: '  else return FIND(parent[x])' },
+  { lineNumber: 6, text: 'UNION(x, y)' },
+  { lineNumber: 7, text: '  parent[FIND(x)] <- FIND(y)' },
+]
+
+const unionFindPathCompressionPseudocodeLines: readonly GraphPseudocodeLine[] = [
+  { lineNumber: 1, text: 'FIND(x) with path compression' },
+  { lineNumber: 2, text: '  if parent[x] != x then' },
+  { lineNumber: 3, text: '    parent[x] <- FIND(parent[x])' },
+  { lineNumber: 4, text: '  return parent[x]' },
+  { lineNumber: 5, text: 'UNION(x, y)' },
+  { lineNumber: 6, text: '  parent[FIND(x)] <- FIND(y)' },
+]
+
+const unionFindUnionByRankPseudocodeLines: readonly GraphPseudocodeLine[] = [
+  { lineNumber: 1, text: 'INITIALISE(n)' },
+  { lineNumber: 2, text: '  parent[1..n] <- 1..n; rank[1..n] <- 0' },
+  { lineNumber: 3, text: 'UNION(x, y)' },
+  { lineNumber: 4, text: '  x <- FIND(x); y <- FIND(y)' },
+  { lineNumber: 5, text: '  if rank[x] < rank[y] then parent[x] <- y' },
+  { lineNumber: 6, text: '  else parent[y] <- x' },
+  { lineNumber: 7, text: '  if rank[x] = rank[y] then rank[x] <- rank[x] + 1' },
+]
+
+const unionFindPseudocodeLinesByMode: Readonly<Record<UnionFindModeId, readonly GraphPseudocodeLine[]>> = {
+  baseline: unionFindBaselinePseudocodeLines,
+  'path-compression': unionFindPathCompressionPseudocodeLines,
+  'union-by-rank': unionFindUnionByRankPseudocodeLines,
+  combined: unionFindUnionByRankPseudocodeLines,
+}
+
 type GraphDirectionOptions = Readonly<{
   directed?: boolean
   weighted?: boolean
@@ -212,6 +280,73 @@ const sortNodeIdsByLabel = (
   [...nodeIds].sort((left, right) => compareLabels(labelByNodeId[left] ?? '', labelByNodeId[right] ?? ''))
 
 const sortEdgeIds = (edgeIds: readonly string[]) => [...edgeIds].sort(compareLabels)
+
+const compareEdgeByWeightAndLabels = (
+  left: GraphEdge,
+  right: GraphEdge,
+  labelByNodeId: Readonly<Record<string, string>>,
+) => {
+  if (left.weight !== right.weight) {
+    return left.weight - right.weight
+  }
+
+  const leftFromLabel = labelByNodeId[left.from] ?? left.from
+  const rightFromLabel = labelByNodeId[right.from] ?? right.from
+  const fromComparison = compareLabels(leftFromLabel, rightFromLabel)
+  if (fromComparison !== 0) {
+    return fromComparison
+  }
+
+  const leftToLabel = labelByNodeId[left.to] ?? left.to
+  const rightToLabel = labelByNodeId[right.to] ?? right.to
+  const toComparison = compareLabels(leftToLabel, rightToLabel)
+  if (toComparison !== 0) {
+    return toComparison
+  }
+
+  return compareLabels(left.id, right.id)
+}
+
+const isUndirectedGraphConnected = (graph: GraphModel): boolean => {
+  if (graph.nodes.length <= 1) {
+    return true
+  }
+
+  const adjacencyList = buildAdjacencyList(graph, { weighted: true })
+  const neighborsByNodeId = adjacencyList.reduce<Record<string, readonly GraphNeighbor[]>>(
+    (accumulator, entry) => {
+      accumulator[entry.nodeId] = entry.neighbors
+      return accumulator
+    },
+    {},
+  )
+  const orderedNodeIds = [...graph.nodes].sort(compareNodesByLabel).map((node) => node.id)
+  const rootNodeId = orderedNodeIds[0]
+  if (rootNodeId === undefined) {
+    return true
+  }
+
+  const visitedNodeIds = new Set<string>([rootNodeId])
+  const queueNodeIds = [rootNodeId]
+  while (queueNodeIds.length > 0) {
+    const currentNodeId = queueNodeIds.shift()
+    if (currentNodeId === undefined) {
+      continue
+    }
+
+    const neighbors = neighborsByNodeId[currentNodeId] ?? []
+    neighbors.forEach((neighbor) => {
+      if (visitedNodeIds.has(neighbor.nodeId)) {
+        return
+      }
+
+      visitedNodeIds.add(neighbor.nodeId)
+      queueNodeIds.push(neighbor.nodeId)
+    })
+  }
+
+  return visitedNodeIds.size === graph.nodes.length
+}
 
 const buildAdjacencyList = (
   graph: GraphModel,
@@ -2123,17 +2258,766 @@ const createFloydWarshallTimeline = ({
   }
 }
 
+const createPrimTimeline = ({
+  graph,
+  startNodeId,
+  scope,
+}: Readonly<{
+  graph: GraphModel
+  startNodeId: string | null
+  scope: GraphTraversalScope
+}>): GraphTraversalTimeline => {
+  const adjacencyList = buildAdjacencyList(graph, { weighted: true })
+  const adjacencyMatrix = buildAdjacencyMatrix(graph, { weighted: true })
+  const labelByNodeId = graph.nodes.reduce<Record<string, string>>((accumulator, node) => {
+    accumulator[node.id] = node.label
+    return accumulator
+  }, {})
+  const edgeIdByKey = createEdgeIdByKey(graph.edges)
+  const roots = toTraversalRoots(graph, startNodeId, 'start-only')
+  const resolvedStartNodeId = roots[0] ?? null
+  const parentByNodeId = graph.nodes.reduce<Record<string, string | null>>((accumulator, node) => {
+    accumulator[node.id] = null
+    return accumulator
+  }, {})
+  const distanceByNodeId = graph.nodes.reduce<Record<string, number | null>>((accumulator, node) => {
+    accumulator[node.id] = null
+    return accumulator
+  }, {})
+  const discoveredNodeIds = new Set<string>()
+  const inTreeNodeIds = new Set<string>()
+  const visitOrderNodeIds: string[] = []
+  const mstEdgeIds = new Set<string>()
+  const queueEntries: Array<Readonly<{ nodeId: string; key: number }>> = []
+  const frames: GraphTraversalFrame[] = []
+
+  const addFrame = ({
+    executedLines,
+    operationText,
+    activeNodeId = null,
+    activeEdgeId = null,
+    processingNodeIds = [],
+    isComplete = false,
+  }: Readonly<{
+    executedLines: readonly number[]
+    operationText: string
+    activeNodeId?: string | null
+    activeEdgeId?: string | null
+    processingNodeIds?: readonly string[]
+    isComplete?: boolean
+  }>) => {
+    const sortedQueueEntries = [...queueEntries].sort((left, right) => {
+      if (left.key !== right.key) {
+        return left.key - right.key
+      }
+      return compareLabels(labelByNodeId[left.nodeId] ?? left.nodeId, labelByNodeId[right.nodeId] ?? right.nodeId)
+    })
+    frames.push({
+      graph: cloneGraphModel(graph),
+      executedLines: [...executedLines],
+      operationText,
+      adjacencyList: cloneAdjacencyList(adjacencyList),
+      adjacencyMatrix: cloneAdjacencyMatrix(adjacencyMatrix),
+      activeNodeId,
+      activeEdgeId,
+      discoveredNodeIds: sortNodeIdsByLabel([...discoveredNodeIds], labelByNodeId),
+      processingNodeIds: [...processingNodeIds],
+      completedNodeIds: sortNodeIdsByLabel([...inTreeNodeIds], labelByNodeId),
+      queueNodeIds: queueEntries.map((entry) => entry.nodeId),
+      callStackNodeIds: [],
+      parentByNodeId: { ...parentByNodeId },
+      distanceByNodeId: { ...distanceByNodeId },
+      visitOrderNodeIds: [...visitOrderNodeIds],
+      traversalTreeEdgeIds: sortEdgeIds([...mstEdgeIds]),
+      reconstructedPathNodeIds: [],
+      reconstructedPathEdgeIds: [],
+      mstEdgeIds: sortEdgeIds([...mstEdgeIds]),
+      priorityQueueEntries: sortedQueueEntries,
+      isComplete,
+    })
+  }
+
+  addFrame({
+    executedLines: [1],
+    operationText:
+      resolvedStartNodeId === null
+        ? 'Prim initialised with an empty graph'
+        : `Prim initialised from root ${labelByNodeId[resolvedStartNodeId]}`,
+  })
+
+  addFrame({
+    executedLines: [2, 3],
+    operationText: 'dist and parent arrays initialised',
+  })
+
+  if (graph.nodes.length === 0 || resolvedStartNodeId === null) {
+    addFrame({
+      executedLines: [16],
+      operationText: 'empty graph, nothing to process',
+      isComplete: true,
+    })
+    return {
+      algorithmId: 'prim-algorithm',
+      title: "Prim's Algorithm",
+      pseudocodeLines: primPseudocodeLines,
+      frames,
+      startNodeId: null,
+      targetNodeId: null,
+      scope,
+    }
+  }
+
+  if (!isUndirectedGraphConnected(graph)) {
+    addFrame({
+      executedLines: [1],
+      operationText: 'precondition failed: Prim requires a connected undirected weighted graph',
+      isComplete: true,
+    })
+    return {
+      algorithmId: 'prim-algorithm',
+      title: "Prim's Algorithm",
+      pseudocodeLines: primPseudocodeLines,
+      frames,
+      startNodeId: resolvedStartNodeId,
+      targetNodeId: null,
+      scope,
+    }
+  }
+
+  addFrame({
+    executedLines: [4],
+    operationText: `T starts from root ${labelByNodeId[resolvedStartNodeId]}`,
+    activeNodeId: resolvedStartNodeId,
+  })
+
+  distanceByNodeId[resolvedStartNodeId] = 0
+  discoveredNodeIds.add(resolvedStartNodeId)
+  addFrame({
+    executedLines: [5],
+    operationText: `set key[${labelByNodeId[resolvedStartNodeId]}] = 0`,
+    activeNodeId: resolvedStartNodeId,
+  })
+
+  graph.nodes.forEach((node) => {
+    queueEntries.push({
+      nodeId: node.id,
+      key: node.id === resolvedStartNodeId ? 0 : Number.POSITIVE_INFINITY,
+    })
+  })
+  addFrame({
+    executedLines: [6],
+    operationText: 'insert all vertices into priority queue by current key',
+  })
+
+  while (queueEntries.length > 0) {
+    addFrame({
+      executedLines: [7],
+      operationText: 'priority queue not empty, continue',
+    })
+
+    let bestIndex = 0
+    for (let index = 1; index < queueEntries.length; index += 1) {
+      const entry = queueEntries[index]
+      const bestEntry = queueEntries[bestIndex]
+      if (entry === undefined || bestEntry === undefined) {
+        continue
+      }
+      if (entry.key < bestEntry.key) {
+        bestIndex = index
+        continue
+      }
+      if (entry.key === bestEntry.key) {
+        const entryLabel = labelByNodeId[entry.nodeId] ?? entry.nodeId
+        const bestLabel = labelByNodeId[bestEntry.nodeId] ?? bestEntry.nodeId
+        if (compareLabels(entryLabel, bestLabel) < 0) {
+          bestIndex = index
+        }
+      }
+    }
+
+    const poppedEntry = queueEntries.splice(bestIndex, 1)[0]
+    if (poppedEntry === undefined) {
+      continue
+    }
+    const currentNodeId = poppedEntry.nodeId
+
+    addFrame({
+      executedLines: [8],
+      operationText: `pop_min -> ${labelByNodeId[currentNodeId]}`,
+      activeNodeId: currentNodeId,
+      processingNodeIds: [currentNodeId],
+    })
+
+    inTreeNodeIds.add(currentNodeId)
+    visitOrderNodeIds.push(currentNodeId)
+    addFrame({
+      executedLines: [9],
+      operationText: `add vertex ${labelByNodeId[currentNodeId]} to T`,
+      activeNodeId: currentNodeId,
+      processingNodeIds: [currentNodeId],
+    })
+
+    const parentNodeId = parentByNodeId[currentNodeId]
+    if (parentNodeId !== null) {
+      const edgeId = edgeIdByKey[createUndirectedEdgeKey(parentNodeId, currentNodeId)] ?? null
+      if (edgeId !== null) {
+        mstEdgeIds.add(edgeId)
+      }
+      addFrame({
+        executedLines: [10],
+        operationText: `add edge (${labelByNodeId[parentNodeId]}, ${labelByNodeId[currentNodeId]})`,
+        activeNodeId: currentNodeId,
+        activeEdgeId: edgeId,
+        processingNodeIds: [currentNodeId],
+      })
+    }
+
+    const neighbors = adjacencyList.find((entry) => entry.nodeId === currentNodeId)?.neighbors ?? []
+    neighbors.forEach((neighbor) => {
+      const edgeId = edgeIdByKey[createUndirectedEdgeKey(currentNodeId, neighbor.nodeId)] ?? null
+      addFrame({
+        executedLines: [11],
+        operationText: `scan edge (${labelByNodeId[currentNodeId]}, ${neighbor.label})`,
+        activeNodeId: currentNodeId,
+        activeEdgeId: edgeId,
+        processingNodeIds: [currentNodeId],
+      })
+
+      const isNeighborInTree = inTreeNodeIds.has(neighbor.nodeId)
+      const currentKey = distanceByNodeId[neighbor.nodeId]
+      const shouldUpdate = !isNeighborInTree && (currentKey === null || currentKey > neighbor.weight)
+
+      addFrame({
+        executedLines: [12],
+        operationText: shouldUpdate
+          ? `${neighbor.label} outside T and key improves to ${neighbor.weight}`
+          : `${neighbor.label} does not satisfy update condition`,
+        activeNodeId: neighbor.nodeId,
+        activeEdgeId: edgeId,
+        processingNodeIds: [currentNodeId],
+      })
+
+      if (!shouldUpdate) {
+        return
+      }
+
+      addFrame({
+        executedLines: [13],
+        operationText: `decrease-key for ${neighbor.label} in priority queue`,
+        activeNodeId: neighbor.nodeId,
+        activeEdgeId: edgeId,
+        processingNodeIds: [currentNodeId],
+      })
+
+      distanceByNodeId[neighbor.nodeId] = neighbor.weight
+      discoveredNodeIds.add(neighbor.nodeId)
+      addFrame({
+        executedLines: [14],
+        operationText: `key[${neighbor.label}] <- ${neighbor.weight}`,
+        activeNodeId: neighbor.nodeId,
+        activeEdgeId: edgeId,
+        processingNodeIds: [currentNodeId],
+      })
+
+      parentByNodeId[neighbor.nodeId] = currentNodeId
+      addFrame({
+        executedLines: [15],
+        operationText: `parent[${neighbor.label}] <- ${labelByNodeId[currentNodeId]}`,
+        activeNodeId: neighbor.nodeId,
+        activeEdgeId: edgeId,
+        processingNodeIds: [currentNodeId],
+      })
+
+      const queueIndex = queueEntries.findIndex((entry) => entry.nodeId === neighbor.nodeId)
+      if (queueIndex >= 0) {
+        const queueEntry = queueEntries[queueIndex]
+        if (queueEntry !== undefined) {
+          queueEntries[queueIndex] = {
+            ...queueEntry,
+            key: neighbor.weight,
+          }
+        }
+      }
+    })
+  }
+
+  const mstWeight = graph.edges
+    .filter((edge) => mstEdgeIds.has(edge.id))
+    .reduce((accumulator, edge) => accumulator + edge.weight, 0)
+  addFrame({
+    executedLines: [16],
+    operationText: `Prim complete: MST has ${mstEdgeIds.size} edge(s), total weight = ${mstWeight}`,
+    isComplete: true,
+  })
+
+  return {
+    algorithmId: 'prim-algorithm',
+    title: "Prim's Algorithm",
+    pseudocodeLines: primPseudocodeLines,
+    frames,
+    startNodeId: resolvedStartNodeId,
+    targetNodeId: null,
+    scope,
+  }
+}
+
+const createKruskalTimeline = ({
+  graph,
+  scope,
+}: Readonly<{
+  graph: GraphModel
+  scope: GraphTraversalScope
+}>): GraphTraversalTimeline => {
+  const adjacencyList = buildAdjacencyList(graph, { weighted: true })
+  const adjacencyMatrix = buildAdjacencyMatrix(graph, { weighted: true })
+  const labelByNodeId = graph.nodes.reduce<Record<string, string>>((accumulator, node) => {
+    accumulator[node.id] = node.label
+    return accumulator
+  }, {})
+  const sortedEdges = [...graph.edges].sort((left, right) =>
+    compareEdgeByWeightAndLabels(left, right, labelByNodeId),
+  )
+  const parentByNodeId = graph.nodes.reduce<Record<string, string>>((accumulator, node) => {
+    accumulator[node.id] = node.id
+    return accumulator
+  }, {})
+  const rankByNodeId = graph.nodes.reduce<Record<string, number>>((accumulator, node) => {
+    accumulator[node.id] = 0
+    return accumulator
+  }, {})
+  const distanceByNodeId = graph.nodes.reduce<Record<string, number | null>>((accumulator, node) => {
+    accumulator[node.id] = null
+    return accumulator
+  }, {})
+  const mstEdgeIds = new Set<string>()
+  const discoveredNodeIds = new Set<string>()
+  const edgeDecisionById: Record<string, 'accepted' | 'rejected' | 'pending'> = {}
+  sortedEdges.forEach((edge) => {
+    edgeDecisionById[edge.id] = 'pending'
+  })
+  const frames: GraphTraversalFrame[] = []
+  let currentEdgeId: string | null = null
+
+  const findRepresentative = (nodeId: string, compress = true): string => {
+    const parentNodeId = parentByNodeId[nodeId]
+    if (parentNodeId === undefined || parentNodeId === nodeId) {
+      return nodeId
+    }
+
+    const representativeNodeId = findRepresentative(parentNodeId, compress)
+    if (compress) {
+      parentByNodeId[nodeId] = representativeNodeId
+    }
+    return representativeNodeId
+  }
+
+  const representativeByNodeId = () =>
+    graph.nodes.reduce<Record<string, string>>((accumulator, node) => {
+      accumulator[node.id] = findRepresentative(node.id, false)
+      return accumulator
+    }, {})
+
+  const addFrame = ({
+    executedLines,
+    operationText,
+    activeEdgeId = null,
+    activeNodeId = null,
+    isComplete = false,
+  }: Readonly<{
+    executedLines: readonly number[]
+    operationText: string
+    activeEdgeId?: string | null
+    activeNodeId?: string | null
+    isComplete?: boolean
+  }>) => {
+    frames.push({
+      graph: cloneGraphModel(graph),
+      executedLines: [...executedLines],
+      operationText,
+      adjacencyList: cloneAdjacencyList(adjacencyList),
+      adjacencyMatrix: cloneAdjacencyMatrix(adjacencyMatrix),
+      activeNodeId,
+      activeEdgeId,
+      discoveredNodeIds: sortNodeIdsByLabel([...discoveredNodeIds], labelByNodeId),
+      processingNodeIds: activeNodeId === null ? [] : [activeNodeId],
+      completedNodeIds: [],
+      queueNodeIds: [],
+      callStackNodeIds: [],
+      parentByNodeId: {},
+      distanceByNodeId: { ...distanceByNodeId },
+      visitOrderNodeIds: [],
+      traversalTreeEdgeIds: sortEdgeIds([...mstEdgeIds]),
+      reconstructedPathNodeIds: [],
+      reconstructedPathEdgeIds: [],
+      mstEdgeIds: sortEdgeIds([...mstEdgeIds]),
+      edgeDecisionById: { ...edgeDecisionById },
+      ufParentByNodeId: { ...parentByNodeId },
+      ufRankByNodeId: { ...rankByNodeId },
+      ufRepresentativeByNodeId: representativeByNodeId(),
+      sortedEdgeIds: sortedEdges.map((edge) => edge.id),
+      currentEdgeId,
+      isComplete,
+    })
+  }
+
+  addFrame({
+    executedLines: [1],
+    operationText: "Kruskal initialised on G = (V, E)",
+  })
+
+  if (!isUndirectedGraphConnected(graph)) {
+    addFrame({
+      executedLines: [1],
+      operationText: 'precondition failed: Kruskal requires a connected undirected weighted graph',
+      isComplete: true,
+    })
+    return {
+      algorithmId: 'kruskal-algorithm',
+      title: "Kruskal's Algorithm",
+      pseudocodeLines: kruskalPseudocodeLines,
+      frames,
+      startNodeId: null,
+      targetNodeId: null,
+      scope,
+    }
+  }
+
+  addFrame({
+    executedLines: [2],
+    operationText: 'edges sorted in ascending order of weight',
+  })
+
+  addFrame({
+    executedLines: [3],
+    operationText: 'Union-Find forest initialised',
+  })
+
+  addFrame({
+    executedLines: [4],
+    operationText: 'MST edge set T initialised empty',
+  })
+
+  sortedEdges.forEach((edge) => {
+    currentEdgeId = edge.id
+    discoveredNodeIds.add(edge.from)
+    discoveredNodeIds.add(edge.to)
+    addFrame({
+      executedLines: [5],
+      operationText: `scan edge (${labelByNodeId[edge.from]}, ${labelByNodeId[edge.to]}) with w=${edge.weight}`,
+      activeEdgeId: edge.id,
+      activeNodeId: edge.from,
+    })
+
+    const leftRepresentative = findRepresentative(edge.from)
+    const rightRepresentative = findRepresentative(edge.to)
+    const canAccept = leftRepresentative !== rightRepresentative
+    addFrame({
+      executedLines: [6],
+      operationText: canAccept
+        ? `FIND(${labelByNodeId[edge.from]}) != FIND(${labelByNodeId[edge.to]}), accept`
+        : `FIND(${labelByNodeId[edge.from]}) = FIND(${labelByNodeId[edge.to]}), reject`,
+      activeEdgeId: edge.id,
+      activeNodeId: edge.from,
+    })
+
+    if (!canAccept) {
+      edgeDecisionById[edge.id] = 'rejected'
+      return
+    }
+
+    edgeDecisionById[edge.id] = 'accepted'
+    const leftRank = rankByNodeId[leftRepresentative] ?? 0
+    const rightRank = rankByNodeId[rightRepresentative] ?? 0
+    if (leftRank < rightRank) {
+      parentByNodeId[leftRepresentative] = rightRepresentative
+    } else if (leftRank > rightRank) {
+      parentByNodeId[rightRepresentative] = leftRepresentative
+    } else {
+      parentByNodeId[rightRepresentative] = leftRepresentative
+      rankByNodeId[leftRepresentative] = leftRank + 1
+    }
+
+    addFrame({
+      executedLines: [7],
+      operationText: `UNION(${labelByNodeId[edge.from]}, ${labelByNodeId[edge.to]})`,
+      activeEdgeId: edge.id,
+      activeNodeId: edge.from,
+    })
+
+    mstEdgeIds.add(edge.id)
+    addFrame({
+      executedLines: [8],
+      operationText: `add edge (${labelByNodeId[edge.from]}, ${labelByNodeId[edge.to]}) to T`,
+      activeEdgeId: edge.id,
+      activeNodeId: edge.to,
+    })
+  })
+
+  const mstWeight = graph.edges
+    .filter((edge) => mstEdgeIds.has(edge.id))
+    .reduce((accumulator, edge) => accumulator + edge.weight, 0)
+  addFrame({
+    executedLines: [9],
+    operationText: `Kruskal complete: MST has ${mstEdgeIds.size} edge(s), total weight = ${mstWeight}`,
+    isComplete: true,
+  })
+
+  return {
+    algorithmId: 'kruskal-algorithm',
+    title: "Kruskal's Algorithm",
+    pseudocodeLines: kruskalPseudocodeLines,
+    frames,
+    startNodeId: null,
+    targetNodeId: null,
+    scope,
+  }
+}
+
+const createUnionFindTimeline = ({
+  graph,
+  mode,
+  scope,
+}: Readonly<{
+  graph: GraphModel
+  mode: UnionFindModeId
+  scope: GraphTraversalScope
+}>): GraphTraversalTimeline => {
+  const adjacencyList = buildAdjacencyList(graph, { weighted: true })
+  const adjacencyMatrix = buildAdjacencyMatrix(graph, { weighted: true })
+  const labelByNodeId = graph.nodes.reduce<Record<string, string>>((accumulator, node) => {
+    accumulator[node.id] = node.label
+    return accumulator
+  }, {})
+  const sortedEdges = [...graph.edges].sort((left, right) =>
+    compareEdgeByWeightAndLabels(left, right, labelByNodeId),
+  )
+  const parentByNodeId = graph.nodes.reduce<Record<string, string>>((accumulator, node) => {
+    accumulator[node.id] = node.id
+    return accumulator
+  }, {})
+  const rankByNodeId = graph.nodes.reduce<Record<string, number>>((accumulator, node) => {
+    accumulator[node.id] = 0
+    return accumulator
+  }, {})
+  const distanceByNodeId = graph.nodes.reduce<Record<string, number | null>>((accumulator, node) => {
+    accumulator[node.id] = null
+    return accumulator
+  }, {})
+  const acceptedEdgeIds = new Set<string>()
+  const discoveredNodeIds = new Set<string>()
+  const edgeDecisionById: Record<string, 'accepted' | 'rejected' | 'pending'> = {}
+  sortedEdges.forEach((edge) => {
+    edgeDecisionById[edge.id] = 'pending'
+  })
+  const frames: GraphTraversalFrame[] = []
+  let currentEdgeId: string | null = null
+
+  const findRepresentativeNoCompression = (nodeId: string): string => {
+    let cursorNodeId = nodeId
+    const guardNodeIds = new Set<string>()
+    while (true) {
+      const parentNodeId = parentByNodeId[cursorNodeId]
+      if (parentNodeId === undefined || parentNodeId === cursorNodeId) {
+        return cursorNodeId
+      }
+      if (guardNodeIds.has(cursorNodeId)) {
+        return cursorNodeId
+      }
+      guardNodeIds.add(cursorNodeId)
+      cursorNodeId = parentNodeId
+    }
+  }
+
+  const findRepresentativeWithCompression = (nodeId: string): string => {
+    const parentNodeId = parentByNodeId[nodeId]
+    if (parentNodeId === undefined || parentNodeId === nodeId) {
+      return nodeId
+    }
+
+    const representativeNodeId = findRepresentativeWithCompression(parentNodeId)
+    parentByNodeId[nodeId] = representativeNodeId
+    return representativeNodeId
+  }
+
+  const representativeByNodeId = () =>
+    graph.nodes.reduce<Record<string, string>>((accumulator, node) => {
+      accumulator[node.id] = findRepresentativeNoCompression(node.id)
+      return accumulator
+    }, {})
+
+  const addFrame = ({
+    executedLines,
+    operationText,
+    activeEdgeId = null,
+    activeNodeId = null,
+    isComplete = false,
+  }: Readonly<{
+    executedLines: readonly number[]
+    operationText: string
+    activeEdgeId?: string | null
+    activeNodeId?: string | null
+    isComplete?: boolean
+  }>) => {
+    frames.push({
+      graph: cloneGraphModel(graph),
+      executedLines: [...executedLines],
+      operationText,
+      adjacencyList: cloneAdjacencyList(adjacencyList),
+      adjacencyMatrix: cloneAdjacencyMatrix(adjacencyMatrix),
+      activeNodeId,
+      activeEdgeId,
+      discoveredNodeIds: sortNodeIdsByLabel([...discoveredNodeIds], labelByNodeId),
+      processingNodeIds: activeNodeId === null ? [] : [activeNodeId],
+      completedNodeIds: [],
+      queueNodeIds: [],
+      callStackNodeIds: [],
+      parentByNodeId: {},
+      distanceByNodeId: { ...distanceByNodeId },
+      visitOrderNodeIds: [],
+      traversalTreeEdgeIds: sortEdgeIds([...acceptedEdgeIds]),
+      reconstructedPathNodeIds: [],
+      reconstructedPathEdgeIds: [],
+      edgeDecisionById: { ...edgeDecisionById },
+      ufParentByNodeId: { ...parentByNodeId },
+      ufRankByNodeId: { ...rankByNodeId },
+      ufRepresentativeByNodeId: representativeByNodeId(),
+      ufMode: mode,
+      sortedEdgeIds: sortedEdges.map((edge) => edge.id),
+      currentEdgeId,
+      isComplete,
+    })
+  }
+
+  addFrame({
+    executedLines: [1],
+    operationText: `Union-Find initialised (${mode})`,
+  })
+
+  addFrame({
+    executedLines: [2],
+    operationText:
+      mode === 'union-by-rank' || mode === 'combined'
+        ? 'parent and rank arrays initialised'
+        : 'parent array initialised',
+  })
+
+  const findForMode = (nodeId: string) =>
+    mode === 'path-compression' || mode === 'combined'
+      ? findRepresentativeWithCompression(nodeId)
+      : findRepresentativeNoCompression(nodeId)
+
+  sortedEdges.forEach((edge) => {
+    currentEdgeId = edge.id
+    discoveredNodeIds.add(edge.from)
+    discoveredNodeIds.add(edge.to)
+    addFrame({
+      executedLines: [3],
+      operationText: `process LINK(${labelByNodeId[edge.from]}, ${labelByNodeId[edge.to]})`,
+      activeEdgeId: edge.id,
+      activeNodeId: edge.from,
+    })
+
+    const leftRepresentative = findForMode(edge.from)
+    const rightRepresentative = findForMode(edge.to)
+    addFrame({
+      executedLines: mode === 'path-compression' ? [1, 2, 3, 4] : [4],
+      operationText: `FIND(${labelByNodeId[edge.from]})=${labelByNodeId[leftRepresentative]}, FIND(${labelByNodeId[edge.to]})=${labelByNodeId[rightRepresentative]}`,
+      activeEdgeId: edge.id,
+      activeNodeId: edge.from,
+    })
+
+    if (leftRepresentative === rightRepresentative) {
+      edgeDecisionById[edge.id] = 'rejected'
+      addFrame({
+        executedLines: [3],
+        operationText: 'same representative, skip UNION',
+        activeEdgeId: edge.id,
+        activeNodeId: edge.to,
+      })
+      return
+    }
+
+    edgeDecisionById[edge.id] = 'accepted'
+    if (mode === 'union-by-rank' || mode === 'combined') {
+      const leftRank = rankByNodeId[leftRepresentative] ?? 0
+      const rightRank = rankByNodeId[rightRepresentative] ?? 0
+      if (leftRank < rightRank) {
+        parentByNodeId[leftRepresentative] = rightRepresentative
+        addFrame({
+          executedLines: [5],
+          operationText: `rank[${labelByNodeId[leftRepresentative]}] < rank[${labelByNodeId[rightRepresentative]}], parent <- ${labelByNodeId[rightRepresentative]}`,
+          activeEdgeId: edge.id,
+          activeNodeId: edge.from,
+        })
+      } else if (leftRank > rightRank) {
+        parentByNodeId[rightRepresentative] = leftRepresentative
+        addFrame({
+          executedLines: [6],
+          operationText: `rank[${labelByNodeId[leftRepresentative]}] > rank[${labelByNodeId[rightRepresentative]}], parent <- ${labelByNodeId[leftRepresentative]}`,
+          activeEdgeId: edge.id,
+          activeNodeId: edge.to,
+        })
+      } else {
+        parentByNodeId[rightRepresentative] = leftRepresentative
+        rankByNodeId[leftRepresentative] = leftRank + 1
+        addFrame({
+          executedLines: [6, 7],
+          operationText: `equal rank, attach ${labelByNodeId[rightRepresentative]} under ${labelByNodeId[leftRepresentative]} and increment rank`,
+          activeEdgeId: edge.id,
+          activeNodeId: edge.to,
+        })
+      }
+    } else {
+      parentByNodeId[leftRepresentative] = rightRepresentative
+      addFrame({
+        executedLines: mode === 'path-compression' ? [5, 6] : [6, 7],
+        operationText: `UNION: parent[${labelByNodeId[leftRepresentative]}] <- ${labelByNodeId[rightRepresentative]}`,
+        activeEdgeId: edge.id,
+        activeNodeId: edge.to,
+      })
+    }
+
+    acceptedEdgeIds.add(edge.id)
+  })
+
+  const complexityText =
+    mode === 'path-compression'
+      ? 'with path compression: O(m log(n))'
+      : mode === 'union-by-rank'
+        ? 'with union by rank: O(m log(n))'
+        : mode === 'combined'
+          ? 'with both optimisations: O(m α(n))'
+          : 'without optimisations: can degrade to O(n) FIND in long chains'
+  addFrame({
+    executedLines: [mode === 'path-compression' ? 4 : mode === 'union-by-rank' || mode === 'combined' ? 7 : 7],
+    operationText: `Union-Find complete, ${complexityText}`,
+    isComplete: true,
+  })
+
+  return {
+    algorithmId: 'union-find',
+    title: 'Union-Find (Disjoint Set)',
+    pseudocodeLines: unionFindPseudocodeLinesByMode[mode],
+    frames,
+    startNodeId: null,
+    targetNodeId: null,
+    scope,
+  }
+}
+
 const createGraphTraversalTimeline = ({
   algorithmId,
   graph,
   startNodeId,
   targetNodeId,
+  unionFindMode,
   scope,
 }: Readonly<{
   algorithmId: GraphTraversalAlgorithmId
   graph: GraphModel
   startNodeId: string | null
   targetNodeId?: string | null
+  unionFindMode?: UnionFindModeId
   scope: GraphTraversalScope
 }>): GraphTraversalTimeline =>
   algorithmId === 'breadth-first-search'
@@ -2172,10 +3056,27 @@ const createGraphTraversalTimeline = ({
                   startNodeId,
                   scope,
                 })
-              : createFloydWarshallTimeline({
-                  graph,
-                  scope,
-                })
+              : algorithmId === 'floyd-warshall-algorithm'
+                ? createFloydWarshallTimeline({
+                    graph,
+                    scope,
+                  })
+                : algorithmId === 'prim-algorithm'
+                  ? createPrimTimeline({
+                      graph,
+                      startNodeId,
+                      scope,
+                    })
+                  : algorithmId === 'kruskal-algorithm'
+                    ? createKruskalTimeline({
+                        graph,
+                        scope,
+                      })
+                    : createUnionFindTimeline({
+                        graph,
+                        mode: unionFindMode ?? 'combined',
+                        scope,
+                      })
 
 export {
   bellmanFordPseudocodeLines,
@@ -2192,11 +3093,19 @@ export {
   createGraphLineEvents,
   createGraphRepresentationTimeline,
   createGraphTraversalTimeline,
+  createKruskalTimeline,
+  createPrimTimeline,
   createTopologicalSortTimeline,
+  createUnionFindTimeline,
   dijkstraPseudocodeLines,
   floydWarshallPseudocodeLines,
   getGraphRepresentationFrameByLineEvent,
   getGraphTraversalFrameByLineEvent,
   graphRepresentationPseudocodeLines,
+  kruskalPseudocodeLines,
+  primPseudocodeLines,
   topologicalSortPseudocodeLines,
+  unionFindBaselinePseudocodeLines,
+  unionFindPathCompressionPseudocodeLines,
+  unionFindUnionByRankPseudocodeLines,
 }

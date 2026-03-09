@@ -311,10 +311,19 @@ type GraphAlgorithmId =
   | 'dijkstra-algorithm'
   | 'bellman-ford-algorithm'
   | 'floyd-warshall-algorithm'
+  | 'prim-algorithm'
+  | 'kruskal-algorithm'
+  | 'union-find'
 
 type GraphTraversalAlgorithmId = Exclude<GraphAlgorithmId, 'graph-representation'>
 
 type GraphTraversalScope = 'start-only' | 'full-graph'
+
+type UnionFindModeId =
+  | 'baseline'
+  | 'path-compression'
+  | 'union-by-rank'
+  | 'combined'
 
 type GraphEditorMode = 'build' | 'run'
 
@@ -407,6 +416,14 @@ type GraphTraversalFrame = Readonly<{
   currentK?: number | null
   currentI?: number | null
   currentJ?: number | null
+  mstEdgeIds?: readonly string[]
+  edgeDecisionById?: Readonly<Record<string, 'accepted' | 'rejected' | 'pending'>>
+  ufParentByNodeId?: Readonly<Record<string, string>>
+  ufRankByNodeId?: Readonly<Record<string, number>>
+  ufRepresentativeByNodeId?: Readonly<Record<string, string>>
+  ufMode?: UnionFindModeId
+  sortedEdgeIds?: readonly string[]
+  currentEdgeId?: string | null
   isComplete: boolean
 }>
 
@@ -509,4 +526,5 @@ export type {
   SortValueItem,
   Topic02AdvancedSortAlgorithmId,
   TopicSummary,
+  UnionFindModeId,
 }
