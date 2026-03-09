@@ -22,10 +22,13 @@ const topicCatalog: readonly TopicSummary[] = [
     summary:
       'Selection, insertion, divide-and-conquer, heap-based, and non-comparison sorting strategies with stability tradeoffs.',
     algorithms: [
+      { id: 'bubble-sort', label: 'Bubble Sort' },
       { id: 'selection-sort', label: 'Selection Sort' },
       { id: 'insertion-sort', label: 'Insertion Sort' },
       { id: 'merge-sort', label: 'Merge Sort' },
       { id: 'quicksort', label: 'Quicksort' },
+      { id: 'quickselect', label: 'Quickselect' },
+      { id: 'median-of-medians', label: 'Median of Medians' },
       { id: 'heapsort', label: 'Heapsort' },
       { id: 'counting-sort', label: 'Counting Sort' },
       { id: 'radix-sort', label: 'Radix Sort' },

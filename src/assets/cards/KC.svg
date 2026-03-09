@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 104" width="72" height="104" aria-label="King of Clubs">
+  <rect x="1" y="1" width="70" height="102" rx="6" fill="#FAFAFA" stroke="#111111" stroke-width="2"/>
+  <defs>
+    <g id="pip" fill="#111111">
+      <circle cx="0" cy="-6" r="7"/>
+      <circle cx="-7" cy="4" r="7"/>
+      <circle cx="7" cy="4" r="7"/>
+      <path d="M-3 10 H3 L1 22 H-1 Z"/>
+    </g>
+  </defs>
+
+  <g fill="#111111" font-family="Menlo, Monaco, Consolas, monospace" font-size="12" font-weight="700">
+    <text x="7" y="16">K</text>
+    <use href="#pip" transform="translate(12 24) scale(0.23)"/>
+  </g>
+
+  <g transform="rotate(180 36 52)" fill="#111111" font-family="Menlo, Monaco, Consolas, monospace" font-size="12" font-weight="700">
+    <text x="7" y="16">K</text>
+    <use href="#pip" transform="translate(12 24) scale(0.23)"/>
+  </g>
+
+  <rect x="19" y="24" width="34" height="56" fill="none" stroke="#111111" stroke-width="1.8"/>
+  <path d="M24 39 L30 30 L36 36 L42 30 L48 39" fill="none" stroke="#111111" stroke-width="2" stroke-linejoin="round"/>
+  <circle cx="30" cy="42" r="1.6" fill="#111111"/>
+  <circle cx="42" cy="42" r="1.6" fill="#111111"/>
+  <path d="M30 55 C32 58 40 58 42 55" fill="none" stroke="#111111" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M28 50 C31 48 41 48 44 50" fill="none" stroke="#111111" stroke-width="1.4"/>
+  <path d="M24 74 L30 62 L36 68 L42 62 L48 74" fill="#111111"/>
+</svg>

@@ -46,13 +46,21 @@ function DirectoryTree({
 
   const selectedIndex = Math.max(entryIds.indexOf(selectedEntryId), 0)
 
-  const updateSelectedEntry = (entryId: string) => {
+  const updateSelectedEntry = (entryId: string, notifyParent = false) => {
     setSelectedEntryId(entryId)
+
+    if (!notifyParent) {
+      return
+    }
 
     const selection = parseEntryId(entryId)
     if (selection !== null) {
       onSelectEntry?.(selection)
     }
+  }
+
+  const activateSelectedEntry = (entryId: string) => {
+    updateSelectedEntry(entryId, true)
   }
 
   const selectByOffset = (offset: number) => {
@@ -83,6 +91,11 @@ function DirectoryTree({
           event.preventDefault()
           selectByOffset(-1)
         }
+
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          activateSelectedEntry(selectedEntryId)
+        }
       }}
     >
       {topics.map((topic) => (
@@ -105,9 +118,8 @@ function DirectoryTree({
                     'block w-full max-w-[720px] border-0 px-4 py-0.5 text-left font-mono text-[0.98rem] outline-none transition-colors',
                     isSelected ? 'bg-[#111111] text-[#FAFAFA]' : 'bg-transparent text-[#111111] hover:bg-[#111111] hover:text-[#FAFAFA]',
                   ].join(' ')}
-                  onClick={() => updateSelectedEntry(entryId)}
+                  onClick={() => activateSelectedEntry(entryId)}
                   onFocus={() => updateSelectedEntry(entryId)}
-                  onMouseEnter={() => updateSelectedEntry(entryId)}
                   type="button"
                 >
                   <span className="inline-block min-w-[1.5rem]">

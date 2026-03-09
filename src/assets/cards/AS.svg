@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 104" width="72" height="104" aria-label="Ace of Spades">
+  <rect x="1" y="1" width="70" height="102" rx="6" fill="#FAFAFA" stroke="#111111" stroke-width="2"/>
+  <defs>
+    <g id="pip" fill="#111111">
+      <path d="M0 -14 C-8 -7 -11 -1 -11 5 C-11 11 -6 16 0 16 C6 16 11 11 11 5 C11 -1 8 -7 0 -14 Z"/>
+      <path d="M-3 14 L3 14 L0 24 Z"/>
+    </g>
+  </defs>
+
+  <g fill="#111111" font-family="Menlo, Monaco, Consolas, monospace" font-size="12" font-weight="700">
+    <text x="7" y="16">A</text>
+    <use href="#pip" transform="translate(12 24) scale(0.23)"/>
+  </g>
+
+  <g transform="rotate(180 36 52)" fill="#111111" font-family="Menlo, Monaco, Consolas, monospace" font-size="12" font-weight="700">
+    <text x="7" y="16">A</text>
+    <use href="#pip" transform="translate(12 24) scale(0.23)"/>
+  </g>
+
+  <use href="#pip" transform="translate(36 53) scale(0.82)"/>
+</svg>

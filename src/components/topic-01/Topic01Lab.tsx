@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 type Topic01View =
   | 'complexity-analysis'
@@ -13,15 +13,25 @@ type ComplexityCurve = Readonly<{
   className: string
   stroke: string
   dashPattern?: string
+  weight: number
   fn: (n: number) => number
 }>
 
 type CorrectnessStep = Readonly<{
+  stepNumber: number
   left: number
   right: number
   mid: number
+  phase: 'initialization' | 'maintenance' | 'termination'
+  jump: string
+  executedLines: readonly number[]
   lines: readonly string[]
   invariant: readonly string[]
+}>
+
+type PseudocodeLine = Readonly<{
+  lineNumber: number
+  text: string
 }>
 
 type DiagnosticProfile = Readonly<{
@@ -63,6 +73,7 @@ const complexityCurves: readonly ComplexityCurve[] = [
     label: 'O(1)',
     className: 'Constant',
     stroke: '#BFBFBF',
+    weight: 180,
     fn: () => 1,
   },
   {
@@ -71,6 +82,7 @@ const complexityCurves: readonly ComplexityCurve[] = [
     className: 'Logarithmic',
     stroke: '#6B7280',
     dashPattern: '6 6',
+    weight: 48,
     fn: (n) => Math.log2(Math.max(n, 1)),
   },
   {
@@ -78,6 +90,7 @@ const complexityCurves: readonly ComplexityCurve[] = [
     label: 'O(n)',
     className: 'Linear',
     stroke: '#111111',
+    weight: 6,
     fn: (n) => n,
   },
   {
@@ -86,6 +99,7 @@ const complexityCurves: readonly ComplexityCurve[] = [
     className: 'Linearithmic',
     stroke: '#9CA3AF',
     dashPattern: '3 4',
+    weight: 1.2,
     fn: (n) => n * Math.log2(Math.max(n, 1)),
   },
   {
@@ -94,51 +108,125 @@ const complexityCurves: readonly ComplexityCurve[] = [
     className: 'Quadratic',
     stroke: '#374151',
     dashPattern: '10 6',
+    weight: 0.08,
     fn: (n) => n * n,
   },
 ] as const
 
-const comparisonAlgorithms: readonly Readonly<{
-  label: string
-  complexity: string
-}>[] = [
-  { label: 'Algorithm A (Insertion Sort)', complexity: 'O(n^2)' },
-  { label: 'Algorithm B (Merge Sort)', complexity: 'O(n log n)' },
-  { label: 'Algorithm C (Binary Search)', complexity: 'O(log n)' },
+const binarySearchArray = [4, 9, 13, 21, 34, 38, 47, 52, 61, 73, 78, 84, 91, 103, 117, 128] as const
+const binarySearchTarget = 128
+
+const binarySearchPseudocodeLines: readonly PseudocodeLine[] = [
+  { lineNumber: 1, text: 'L <- 1' },
+  { lineNumber: 2, text: 'R <- n              ' },
+  { lineNumber: 3, text: 'while L <= R:' },
+  { lineNumber: 4, text: '  mid <- L + floor((R - L) / 2)' },
+  { lineNumber: 5, text: '  if A[mid] == target:' },
+  { lineNumber: 6, text: '    return mid        ' },
+  { lineNumber: 7, text: '  if A[mid] < target:' },
+  { lineNumber: 8, text: '    L <- mid + 1   ' },
+  { lineNumber: 9, text: '  else:' },
+  { lineNumber: 10, text: '    R <- mid - 1 ' },
+  { lineNumber: 11, text: 'return NOT_FOUND' },
 ] as const
 
-const binarySearchArray = [10, 20, 30, 40, 48, 95, 101, 120, 125] as const
+const toDisplayIndex = (zeroBasedIndex: number) => zeroBasedIndex + 1
+const formatDisplayInterval = (left: number, right: number) =>
+  `[${toDisplayIndex(left)}, ${toDisplayIndex(right)}]`
 
-const correctnessSteps: readonly CorrectnessStep[] = [
-  {
-    left: 0,
-    right: 8,
-    mid: 4,
-    lines: [
-      'Comparing target 101 with array[mid] 48.',
-      '101 is greater than 48, so the next search range moves right.',
-      'Discard the left half because it can no longer contain the target.',
-    ],
-    invariant: [
-      'If the target exists, it is still inside array[L..R].',
-      'All values left of L are strictly too small for the target.',
-    ],
-  },
-  {
-    left: 5,
-    right: 8,
-    mid: 6,
-    lines: [
-      'Comparing target 101 with array[mid] 101.',
-      'The target matches the midpoint value.',
-      'Binary search can terminate because the postcondition is satisfied.',
-    ],
-    invariant: [
-      'The active range still contains every candidate position.',
-      'The search terminates because the goal state has been reached.',
-    ],
-  },
-] as const
+const buildBinarySearchTrace = (
+  values: readonly number[],
+  target: number,
+): readonly CorrectnessStep[] => {
+  const steps: CorrectnessStep[] = []
+  let left = 0
+  let right = values.length - 1
+  let stepNumber = 1
+
+  while (left <= right) {
+    const mid = left + Math.floor((right - left) / 2)
+    const midValue = values[mid]
+
+    if (midValue === undefined) {
+      break
+    }
+
+    let nextLeft = left
+    let nextRight = right
+    let phase: CorrectnessStep['phase'] = stepNumber === 1 ? 'initialization' : 'maintenance'
+    let operation = ''
+    const displayMid = toDisplayIndex(mid)
+
+    if (midValue === target) {
+      phase = stepNumber === 1 ? 'initialization' : 'termination'
+      operation = `Target ${target} equals array[mid], so search stops at position ${displayMid}.`
+    } else if (midValue < target) {
+      nextLeft = mid + 1
+      operation = `${midValue} < ${target}, so jump right: L <- mid + 1 = ${toDisplayIndex(nextLeft)}.`
+    } else {
+      nextRight = mid - 1
+      operation = `${midValue} > ${target}, so jump left: R <- mid - 1 = ${toDisplayIndex(nextRight)}.`
+    }
+
+    const previousWidth = right - left + 1
+    const nextWidth = Math.max(0, nextRight - nextLeft + 1)
+    const isInitializationStep = stepNumber === 1
+    const executedLines: number[] = [3, 4, 5]
+    const jump =
+      midValue === target
+        ? `Jump ${stepNumber}: ${formatDisplayInterval(left, right)} -> found at position ${displayMid}`
+        : `Jump ${stepNumber}: ${formatDisplayInterval(left, right)} -> ${formatDisplayInterval(nextLeft, nextRight)}`
+
+    const invariantLines: string[] = []
+    if (isInitializationStep) {
+      invariantLines.push(`Initialization: n=${values.length}, so start with [L, R] = [1, n].`)
+      invariantLines.push('Invariant starts true: if target exists, it is inside A[L..R].')
+    } else if (midValue !== target) {
+      invariantLines.push(
+        `Maintenance: interval shrinks from ${previousWidth} to ${nextWidth} candidates.`,
+      )
+      invariantLines.push('Invariant preserved: discarded half cannot contain the target.')
+    } else {
+      invariantLines.push('Termination: A[mid] = target, so postcondition is satisfied.')
+      invariantLines.push('Correct index returned with no unresolved candidates.')
+    }
+
+    if (midValue === target) {
+      executedLines.push(6)
+    } else if (midValue < target) {
+      executedLines.push(7, 8)
+    } else {
+      executedLines.push(7, 9, 10)
+    }
+
+    steps.push({
+      stepNumber,
+      left,
+      right,
+      mid,
+      phase,
+      jump,
+      executedLines,
+      lines: [
+        `Compare target ${target} with A[${displayMid}] = ${midValue}.`,
+        operation,
+      ],
+      invariant: invariantLines,
+    })
+
+    if (midValue === target) {
+      break
+    }
+
+    left = nextLeft
+    right = nextRight
+    stepNumber += 1
+  }
+
+  return steps
+}
+
+const correctnessSteps = buildBinarySearchTrace(binarySearchArray, binarySearchTarget)
 
 const diagnosticAlgorithmLabels: Record<DiagnosticAlgorithm, string> = {
   'merge-sort': 'Merge Sort',
@@ -262,10 +350,21 @@ function ComplexityAnalysisView() {
 
   const width = 520
   const height = 280
+  const chartPadding = {
+    top: 20,
+    right: 16,
+    bottom: 44,
+    left: 60,
+  }
 
   const samples = useMemo(() => createSampleSizes(inputSize), [inputSize])
   const maxValue = useMemo(
-    () => Math.max(...samples.map((sample) => sample * sample)),
+    () =>
+      Math.max(
+        ...samples.flatMap((sample) =>
+          complexityCurves.map((curve) => curve.fn(sample) * curve.weight),
+        ),
+      ),
     [samples],
   )
 
@@ -278,9 +377,11 @@ function ComplexityAnalysisView() {
               <svg
                 aria-label="Complexity growth chart"
                 className="h-auto w-full"
-                viewBox={`0 0 ${width + 48} ${height + 32}`}
+                viewBox={`0 0 ${width + chartPadding.left + chartPadding.right} ${
+                  height + chartPadding.top + chartPadding.bottom
+                }`}
               >
-                <g transform="translate(32, 8)">
+                <g transform={`translate(${chartPadding.left}, ${chartPadding.top})`}>
                   {Array.from({ length: 8 }, (_, row) => (
                     <line
                       key={`row-${row}`}
@@ -309,7 +410,9 @@ function ComplexityAnalysisView() {
                     <polyline
                       key={curve.id}
                       fill="none"
-                      points={createPolylinePoints(samples, height, width, maxValue, curve.fn)}
+                      points={createPolylinePoints(samples, height, width, maxValue, (n) =>
+                        curve.fn(n) * curve.weight,
+                      )}
                       stroke={curve.stroke}
                       strokeDasharray={curve.dashPattern}
                       strokeWidth={curve.id === 'linear' ? 2.2 : 1.7}
@@ -319,16 +422,21 @@ function ComplexityAnalysisView() {
                     fill="#111111"
                     fontFamily="'SF Mono', 'JetBrains Mono', Menlo, monospace"
                     fontSize="12"
-                    transform={`translate(-20, ${height / 2}) rotate(-90)`}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    transform={`rotate(-90, -34, ${height / 2})`}
+                    x={-34}
+                    y={height / 2}
                   >
                     Operation Count / Relative Cost
                   </text>
                   <text
-                    x={width / 2 - 36}
-                    y={height + 24}
+                    x={width / 2}
+                    y={height + 30}
                     fill="#111111"
                     fontFamily="'SF Mono', 'JetBrains Mono', Menlo, monospace"
                     fontSize="12"
+                    textAnchor="middle"
                   >
                     Input Size (n)
                   </text>
@@ -336,27 +444,19 @@ function ComplexityAnalysisView() {
               </svg>
             </div>
             <div className="mt-4 space-y-3">
-              <div className="flex items-center gap-4">
-                <span className="min-w-[6ch] rounded border border-[#E5E5E5] bg-[#FAFAFA] px-2 py-1 font-mono text-[0.9rem] text-[#111111]">
+              <div className="flex items-center gap-3">
+                <span className="min-w-[6ch] shrink-0 rounded border border-[#E5E5E5] bg-[#FAFAFA] px-2 py-1 font-mono text-[0.9rem] text-[#111111]">
                   n = {inputSize}
                 </span>
                 <input
                   aria-label="Input size"
-                  className="w-full accent-[#111111]"
+                  className="ml-1 w-full accent-[#111111]"
                   max={256}
                   min={8}
                   onChange={(event) => setInputSize(Number(event.target.value))}
                   type="range"
                   value={inputSize}
                 />
-              </div>
-              <div className="grid gap-2 md:grid-cols-3">
-                {comparisonAlgorithms.map((algorithm) => (
-                  <div key={algorithm.label} className="border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2">
-                    <div className="font-mono text-[0.84rem] text-[#666666]">{algorithm.label}</div>
-                    <div className="mt-1 font-mono text-[0.94rem] text-[#111111]">{algorithm.complexity}</div>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
@@ -368,7 +468,7 @@ function ComplexityAnalysisView() {
                 </div>
                 <div className="mt-1 font-mono text-[1rem] text-[#111111]">{curve.label}</div>
                 <div className="mt-2 font-mono text-[0.88rem] text-[#111111]">
-                  n={inputSize}: {formatInteger(curve.fn(inputSize))} relative ops
+                  n={inputSize}: {formatInteger(curve.fn(inputSize) * curve.weight)} relative ops
                 </div>
               </div>
             ))}
@@ -380,9 +480,61 @@ function ComplexityAnalysisView() {
 }
 
 function CorrectnessAndInvariantsView() {
-  const [stepIndex, setStepIndex] = useState(0)
-  const step = correctnessSteps[stepIndex] ?? correctnessSteps[0]
-  const target = 101
+  const lineEvents = useMemo(
+    () =>
+      correctnessSteps.flatMap((correctnessStep, index) =>
+        correctnessStep.executedLines.map((lineNumber) => ({
+          stepIndex: index,
+          lineNumber,
+        })),
+      ),
+    [],
+  )
+  const [lineEventIndex, setLineEventIndex] = useState(0)
+  const activeEvent = lineEvents[lineEventIndex] ?? lineEvents[0]
+  const step = correctnessSteps[activeEvent?.stepIndex ?? 0] ?? correctnessSteps[0]
+  const target = binarySearchTarget
+  const arrayGridStyle = {
+    gridTemplateColumns: `repeat(${binarySearchArray.length}, minmax(0, 1fr))`,
+  }
+  const isDenseArray = binarySearchArray.length >= 14
+  const phaseLabel = `${step.phase[0].toUpperCase()}${step.phase.slice(1)}`
+  const activeTraceLine =
+    activeEvent?.lineNumber ??
+    binarySearchPseudocodeLines[0]?.lineNumber ??
+    1
+  const lastLineEventIndex = Math.max(0, lineEvents.length - 1)
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
+        return
+      }
+
+      const target = event.target
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        setLineEventIndex((current) => Math.max(0, current - 1))
+      }
+
+      if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        setLineEventIndex((current) => Math.min(lastLineEventIndex, current + 1))
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [lastLineEventIndex])
 
   return (
     <div className="space-y-6">
@@ -392,47 +544,110 @@ function CorrectnessAndInvariantsView() {
             <h4 className="text-[1.35rem] font-medium tracking-[-0.03em] text-[#111111]">
               Step Execution and Correctness
             </h4>
-            <div className="flex items-center gap-2">
-              <button
-                className="border border-[#E5E5E5] px-3 py-1.5 font-mono text-[0.88rem] text-[#111111] disabled:cursor-not-allowed disabled:text-[#999999]"
-                disabled={stepIndex === 0}
-                onClick={() => setStepIndex((current) => Math.max(0, current - 1))}
-                type="button"
-              >
-                Prev
-              </button>
-              <button
-                className="border border-[#111111] bg-[#111111] px-3 py-1.5 font-mono text-[0.88rem] text-[#FAFAFA] disabled:cursor-not-allowed disabled:border-[#E5E5E5] disabled:bg-[#FAFAFA] disabled:text-[#999999]"
-                disabled={stepIndex === correctnessSteps.length - 1}
-                onClick={() =>
-                  setStepIndex((current) => Math.min(correctnessSteps.length - 1, current + 1))
-                }
-                type="button"
-              >
-                Next
-              </button>
+            <div className="font-mono text-[0.82rem] text-[#666666]">
+              Use ← / → keys to step
             </div>
           </div>
 
-          <div className="grid gap-6 xl:grid-cols-[220px_minmax(0,1fr)]">
+          <div className="grid gap-6 xl:grid-cols-2">
+            <div className="border border-[#E5E5E5] bg-white p-4">
+              <div className="font-mono text-[0.92rem] text-[#666666]">Binary Search Pseudocode</div>
+              <div className="mt-3 border border-[#E5E5E5] bg-[#FAFAFA] p-2 font-mono text-[0.86rem] leading-6">
+                {binarySearchPseudocodeLines.map((line) => {
+                  const isCurrent = line.lineNumber === activeTraceLine
+
+                  return (
+                    <div
+                      key={line.lineNumber}
+                      className={[
+                        'flex gap-3 px-2 py-0.5 transition-colors',
+                        isCurrent ? 'bg-[#E5E5E5] text-[#111111]' : 'bg-transparent text-[#666666]',
+                      ].join(' ')}
+                    >
+                      <span className="w-[2ch] text-right text-[#666666]">{line.lineNumber}</span>
+                      <span>{line.text}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="border border-[#E5E5E5] bg-[#FAFAFA] p-4">
+              <div className="font-mono text-[0.92rem] text-[#666666]">
+                Proof Checklist
+              </div>
+              <div className="mt-3 space-y-2 font-mono text-[0.9rem] leading-6 text-[#111111]">
+                <div>[1] Initialization: closed interval starts at [1, n] for array length n.</div>
+                <div>[2] Maintenance: each jump removes at least one element and keeps target in range.</div>
+                <div>[3] Termination: when A[mid] == target, return position; when L &gt; R, return NOT_FOUND.</div>
+                <div>
+                  Bounds note: for [L, R], use R=n and updates mid+1 / mid-1. For [L, R), use R=n+1
+                  and update R=mid instead of mid-1.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
             <div className="space-y-2 border border-[#E5E5E5] bg-[#FAFAFA] p-4 font-mono text-[0.95rem] text-[#111111]">
+              <div>step: {step.stepNumber} / {correctnessSteps.length}</div>
+              <div>phase: {phaseLabel}</div>
               <div>target: {target}</div>
-              <div>L: {step.left}</div>
-              <div>mid: {step.mid}</div>
-              <div>R: {step.right}</div>
-              <div>array[mid]: {binarySearchArray[step.mid]}</div>
+              <div>L: {toDisplayIndex(step.left)}</div>
+              <div>mid: {toDisplayIndex(step.mid)}</div>
+              <div>R: {toDisplayIndex(step.right)}</div>
+              <div>
+                A[mid]: A[{toDisplayIndex(step.mid)}] = {binarySearchArray[step.mid]}
+              </div>
+              <div className="pt-1 text-[0.86rem] text-[#666666]">{step.jump}</div>
             </div>
 
-            <div className="overflow-x-auto border border-[#E5E5E5] bg-white p-4">
-              <div className="relative min-w-[640px]">
-                <div className="mb-6 grid grid-cols-9 gap-2 font-mono text-[0.86rem] text-[#111111]">
+            <div className="overflow-hidden border border-[#E5E5E5] bg-white p-3 sm:p-4">
+              <div className="mb-2 font-mono text-[0.85rem] text-[#666666]">
+                Sorted List
+              </div>
+              <div className="relative">
+                <div className="mb-1 font-mono text-[0.78rem] tracking-[0.04em] text-[#666666]">
+                  Pointer (L / mid / R)
+                </div>
+                <div
+                  className={[
+                    'mb-3 grid font-mono text-[#111111]',
+                    isDenseArray ? 'gap-[2px] text-[0.66rem]' : 'gap-2 text-[0.86rem]',
+                  ].join(' ')}
+                  style={arrayGridStyle}
+                >
                   {binarySearchArray.map((value, index) => (
                     <div key={`marker-${value}-${index}`} className="text-center">
-                      {index === step.left ? 'L' : index === step.mid ? 'mid' : index === step.right ? 'R' : ''}
+                      {[
+                        index === step.left ? 'L' : '',
+                        index === step.mid ? 'M' : '',
+                        index === step.right ? 'R' : '',
+                      ]
+                        .filter((label) => label.length > 0)
+                        .join('/')}
                     </div>
                   ))}
                 </div>
-                <div className="grid grid-cols-9 gap-2">
+                <div className="mb-1 font-mono text-[0.78rem] tracking-[0.04em] text-[#666666]">
+                  Index
+                </div>
+                <div
+                  className={[
+                    'mb-3 grid font-mono text-[#666666]',
+                    isDenseArray ? 'gap-[2px] text-[0.68rem]' : 'gap-2 text-[0.8rem]',
+                  ].join(' ')}
+                  style={arrayGridStyle}
+                >
+                  {binarySearchArray.map((_, index) => (
+                    <div key={`index-${index}`} className="text-center">
+                      {toDisplayIndex(index)}
+                    </div>
+                  ))}
+                </div>
+                <div className="mb-1 font-mono text-[0.78rem] tracking-[0.04em] text-[#666666]">
+                  Value
+                </div>
+                <div className={isDenseArray ? 'grid gap-[2px]' : 'grid gap-2'} style={arrayGridStyle}>
                   {binarySearchArray.map((value, index) => {
                     const isOutsideRange = index < step.left || index > step.right
                     const isMid = index === step.mid
@@ -441,7 +656,8 @@ function CorrectnessAndInvariantsView() {
                       <div
                         key={`${value}-${index}`}
                         className={[
-                          'flex h-14 items-center justify-center border font-mono text-[1rem] transition-colors',
+                          'flex items-center justify-center border font-mono transition-colors',
+                          isDenseArray ? 'h-10 text-[0.72rem]' : 'h-14 text-[1rem]',
                           isMid
                             ? 'border-[#111111] bg-[#111111] text-[#FAFAFA]'
                             : isOutsideRange
@@ -458,24 +674,6 @@ function CorrectnessAndInvariantsView() {
             </div>
           </div>
 
-          <div className="grid gap-6 xl:grid-cols-2">
-            <div className="border border-[#E5E5E5] bg-[#FAFAFA] p-4">
-              <div className="font-mono text-[0.92rem] text-[#666666]">Next Operation</div>
-              <div className="mt-3 space-y-2 font-mono text-[0.95rem] text-[#111111]">
-                {step.lines.map((line) => (
-                  <div key={line}>&gt; {line}</div>
-                ))}
-              </div>
-            </div>
-            <div className="border border-[#E5E5E5] bg-[#FAFAFA] p-4">
-              <div className="font-mono text-[0.92rem] text-[#666666]">Invariant and Verification</div>
-              <div className="mt-3 space-y-2 font-mono text-[0.95rem] text-[#111111]">
-                {step.invariant.map((line) => (
-                  <div key={line}>[ok] {line}</div>
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
       </SectionFrame>
     </div>
@@ -643,10 +841,8 @@ function PhysicalMachineMetaphorView() {
 
 function Topic01Lab({
   selectedView,
-  onViewChange,
 }: Readonly<{
   selectedView: Topic01View
-  onViewChange: (view: Topic01View) => void
 }>) {
   const activeView = selectedView
   const activeSummary =
@@ -672,28 +868,6 @@ function Topic01Lab({
         <div className="font-mono text-[0.84rem] text-[#666666]">
           {activeSummary}
         </div>
-      </div>
-
-      <div className="mb-6 flex flex-wrap gap-2">
-        {topic01Views.map((view) => {
-          const isActive = view.id === activeView
-
-          return (
-            <button
-              key={view.id}
-              className={[
-                'border px-3 py-1.5 font-mono text-[0.88rem] transition-colors',
-                isActive
-                  ? 'border-[#111111] bg-[#111111] text-[#FAFAFA]'
-                  : 'border-[#E5E5E5] bg-white text-[#111111]',
-              ].join(' ')}
-              onClick={() => onViewChange(view.id)}
-              type="button"
-            >
-              {view.label}
-            </button>
-          )
-        })}
       </div>
 
       {activeView === 'complexity-analysis' ? <ComplexityAnalysisView /> : null}

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 104" width="72" height="104" aria-label="Five of Clubs">
+  <rect x="1" y="1" width="70" height="102" rx="6" fill="#FAFAFA" stroke="#111111" stroke-width="2"/>
+  <defs>
+    <g id="pip" fill="#111111">
+      <circle cx="0" cy="-6" r="7"/>
+      <circle cx="-7" cy="4" r="7"/>
+      <circle cx="7" cy="4" r="7"/>
+      <path d="M-3 10 H3 L1 22 H-1 Z"/>
+    </g>
+  </defs>
+
+  <g fill="#111111" font-family="Menlo, Monaco, Consolas, monospace" font-size="12" font-weight="700">
+    <text x="7" y="16">5</text>
+    <use href="#pip" transform="translate(12 24) scale(0.23)"/>
+  </g>
+
+  <g transform="rotate(180 36 52)" fill="#111111" font-family="Menlo, Monaco, Consolas, monospace" font-size="12" font-weight="700">
+    <text x="7" y="16">5</text>
+    <use href="#pip" transform="translate(12 24) scale(0.23)"/>
+  </g>
+
+  <use href="#pip" transform="translate(24 30) scale(0.44)"/>
+  <use href="#pip" transform="translate(48 30) scale(0.44)"/>
+  <use href="#pip" transform="translate(36 53) scale(0.44)"/>
+  <use href="#pip" transform="translate(24 76) scale(0.44)"/>
+  <use href="#pip" transform="translate(48 76) scale(0.44)"/>
+</svg>
