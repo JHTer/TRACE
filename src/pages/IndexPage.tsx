@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -111,8 +112,59 @@ const workbenchRouteMap: Readonly<Record<string, ActiveScreen>> = {
   'topic-3:union-find': { kind: 'topic-3', view: 'union-find' },
 }
 
+const defaultRouteKey = 'menu:home'
+const routeParamKey = 'screen'
+
 const toRouteKey = (selection: DirectorySelection) =>
   `${selection.topicId}:${selection.algorithmId}`
+
+const toRouteKeyForScreen = (screen: ActiveScreen) => {
+  if (screen.kind === 'menu') {
+    return defaultRouteKey
+  }
+
+  if (screen.kind === 'topic-1') {
+    return `topic-1:${screen.view}`
+  }
+
+  if (screen.kind === 'topic-2') {
+    return `topic-2:${screen.view}`
+  }
+
+  return `topic-3:${screen.view}`
+}
+
+const resolveScreenByRouteKey = (routeKey: string): ActiveScreen =>
+  workbenchRouteMap[routeKey] ?? workbenchRouteMap[defaultRouteKey] ?? { kind: 'menu' }
+
+const getRouteKeyFromLocation = () => {
+  if (typeof window === 'undefined') {
+    return defaultRouteKey
+  }
+
+  const params = new URLSearchParams(window.location.search)
+  return params.get(routeParamKey) ?? defaultRouteKey
+}
+
+const commitRouteKey = (routeKey: string, mode: 'push' | 'replace') => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const url = new URL(window.location.href)
+  if (routeKey === defaultRouteKey) {
+    url.searchParams.delete(routeParamKey)
+  } else {
+    url.searchParams.set(routeParamKey, routeKey)
+  }
+
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`
+  if (mode === 'push') {
+    window.history.pushState({ routeKey }, '', nextUrl)
+  } else {
+    window.history.replaceState({ routeKey }, '', nextUrl)
+  }
+}
 
 const resolveScreen = (selection: DirectorySelection): ActiveScreen | null => {
   const routeKey = toRouteKey(selection)
@@ -300,7 +352,9 @@ function BreadcrumbDirectoryPicker({
 }
 
 function IndexPage() {
-  const [activeScreen, setActiveScreen] = useState<ActiveScreen>({ kind: 'menu' })
+  const [activeScreen, setActiveScreen] = useState<ActiveScreen>(() =>
+    resolveScreenByRouteKey(getRouteKeyFromLocation()),
+  )
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
   const [quicksortVariant, setQuicksortVariant] = useState<QuicksortVariantId>('lomuto')
   const [quickselectStrategy, setQuickselectStrategy] =
@@ -308,12 +362,7 @@ function IndexPage() {
   const pageMaxWidthClass =
     activeScreen.kind === 'topic-3' ? 'max-w-[1200px]' : 'max-w-[980px]'
 
-  const handleDirectorySelection = (selection: DirectorySelection) => {
-    const nextScreen = resolveScreen(selection)
-    if (nextScreen === null) {
-      return
-    }
-
+  const applyScreen = useCallback((nextScreen: ActiveScreen) => {
     if (nextScreen.kind === 'topic-2' && nextScreen.view === 'quicksort') {
       setQuicksortVariant('lomuto')
     }
@@ -323,7 +372,43 @@ function IndexPage() {
     }
 
     setActiveScreen(nextScreen)
+  }, [])
+
+  const handleDirectorySelection = (selection: DirectorySelection) => {
+    const nextScreen = resolveScreen(selection)
+    if (nextScreen === null) {
+      return
+    }
+
+    applyScreen(nextScreen)
+    commitRouteKey(toRouteKey(selection), 'push')
   }
+
+  useEffect(() => {
+    const routeKey = getRouteKeyFromLocation()
+    const nextScreen = resolveScreenByRouteKey(routeKey)
+    const canonicalRouteKey = toRouteKeyForScreen(nextScreen)
+    commitRouteKey(canonicalRouteKey, 'replace')
+  }, [])
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const routeKey = getRouteKeyFromLocation()
+      const nextScreen = resolveScreenByRouteKey(routeKey)
+      applyScreen(nextScreen)
+
+      const canonicalRouteKey = toRouteKeyForScreen(nextScreen)
+      if (canonicalRouteKey !== routeKey) {
+        commitRouteKey(canonicalRouteKey, 'replace')
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [applyScreen])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
