@@ -34,6 +34,12 @@ const algorithmAliasMap: Readonly<Record<string, readonly string[]>> = {
   quicksort: ['partition'],
   quickselect: ['selection'],
   'median-of-medians': ['pivot'],
+  'salesman-house': ['dp', 'house robber', 'take skip', 'adjacent houses'],
+  maze: ['dp', 'grid', 'path', 'target to start'],
+  'longest-increasing-subsequence': ['dp', 'lis', 'sequence'],
+  'longest-common-subsequence': ['dp', 'lcs', 'sequence match'],
+  'edit-distance': ['dp', 'levenshtein', 'string edits'],
+  'maximum-subarray': ['dp', 'kadane', 'max subarray', 'best segment'],
 }
 
 const normalizeSearchText = (value: string) =>

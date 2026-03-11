@@ -60,16 +60,14 @@ const topicCatalog: readonly TopicSummary[] = [
     shortLabel: '04',
     title: 'Dynamic Programming',
     summary:
-      'Top-down and bottom-up formulations, state transitions, reconstruction, and classic optimization problems.',
+      'State tables, recurrence choices, reconstruction paths, and linear or grid-based optimisation problems.',
     algorithms: [
-      { id: 'top-down-dynamic-programming', label: 'Top Down Dynamic Programming' },
-      { id: 'bottom-up-dynamic-programming', label: 'Bottom Up Dynamic Programming' },
-      { id: 'state-transitions', label: 'State Transitions' },
-      { id: 'solution-reconstruction', label: 'Solution Reconstruction' },
-      { id: 'unbounded-knapsack', label: 'Unbounded Knapsack' },
-      { id: 'zero-one-knapsack', label: 'Zero One Knapsack' },
+      { id: 'salesman-house', label: 'Salesman House' },
+      { id: 'maze', label: 'Maze' },
+      { id: 'longest-increasing-subsequence', label: 'Longest Increasing Subsequence' },
+      { id: 'longest-common-subsequence', label: 'Longest Common Subsequence' },
       { id: 'edit-distance', label: 'Edit Distance' },
-      { id: 'matrix-chain-multiplication', label: 'Matrix Chain Multiplication' },
+      { id: 'maximum-subarray', label: 'Maximum Subarray' },
     ],
   }),
   createTopic({

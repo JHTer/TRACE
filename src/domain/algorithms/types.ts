@@ -302,6 +302,84 @@ type StabilitySnapshot = Readonly<{
   groups: readonly StabilitySnapshotGroup[]
 }>
 
+type DynamicProgrammingAlgorithmId =
+  | 'salesman-house'
+  | 'maze'
+  | 'longest-increasing-subsequence'
+  | 'longest-common-subsequence'
+  | 'edit-distance'
+  | 'maximum-subarray'
+
+type DynamicProgrammingPseudocodeLine = Readonly<{
+  lineNumber: number
+  text: string
+}>
+
+type DynamicProgrammingCellTone = 'default' | 'active' | 'dependency' | 'path' | 'best'
+
+type DynamicProgrammingCell = Readonly<{
+  label: string
+  value: string
+  tone: DynamicProgrammingCellTone
+}>
+
+type DynamicProgrammingMatrixRow = Readonly<{
+  label: string
+  cells: readonly DynamicProgrammingCell[]
+}>
+
+type DynamicProgrammingPanel =
+  | Readonly<{
+      kind: 'array'
+      title: string
+      cells: readonly DynamicProgrammingCell[]
+    }>
+  | Readonly<{
+      kind: 'matrix'
+      title: string
+      columnLabels: readonly string[]
+      rows: readonly DynamicProgrammingMatrixRow[]
+    }>
+
+type DynamicProgrammingMetric = Readonly<{
+  label: string
+  value: string
+}>
+
+type DynamicProgrammingPreset = Readonly<{
+  id: string
+  label: string
+}>
+
+type DynamicProgrammingComplexityProfile = Readonly<{
+  time: string
+  space: string
+  note: string
+}>
+
+type DynamicProgrammingFrame = Readonly<{
+  executedLines: readonly number[]
+  operationText: string
+  detailText: string
+  panels: readonly DynamicProgrammingPanel[]
+  metrics: readonly DynamicProgrammingMetric[]
+  reconstructionText: string | null
+  isComplete: boolean
+}>
+
+type DynamicProgrammingTimeline = Readonly<{
+  algorithmId: DynamicProgrammingAlgorithmId
+  title: string
+  subtitle: string
+  recurrence: string
+  directionNote: string | null
+  pseudocodeLines: readonly DynamicProgrammingPseudocodeLine[]
+  complexityProfile: DynamicProgrammingComplexityProfile
+  presets: readonly DynamicProgrammingPreset[]
+  activePresetId: string
+  frames: readonly DynamicProgrammingFrame[]
+}>
+
 type GraphAlgorithmId =
   | 'graph-representation'
   | 'breadth-first-search'
@@ -468,6 +546,17 @@ export type {
   CardItem,
   CardSuit,
   CountingFrameState,
+  DynamicProgrammingAlgorithmId,
+  DynamicProgrammingCell,
+  DynamicProgrammingCellTone,
+  DynamicProgrammingComplexityProfile,
+  DynamicProgrammingFrame,
+  DynamicProgrammingMatrixRow,
+  DynamicProgrammingMetric,
+  DynamicProgrammingPanel,
+  DynamicProgrammingPreset,
+  DynamicProgrammingPseudocodeLine,
+  DynamicProgrammingTimeline,
   ElementarySortAlgorithmId,
   GraphAdjacencyEntry,
   GraphAdjacencyMatrix,
