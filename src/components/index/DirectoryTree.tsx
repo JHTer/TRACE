@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { TopicSummary } from '../../domain/algorithms/types.ts'
 
@@ -35,6 +35,8 @@ function DirectoryTree({
   const [selectedEntryId, setSelectedEntryId] = useState(
     createEntryId(defaultSelectedEntry.topicId, defaultSelectedEntry.algorithmId),
   )
+  const [interactionMode, setInteractionMode] = useState<'keyboard' | 'mouse'>('keyboard')
+  const entryRefs = useRef(new Map<string, HTMLButtonElement>())
 
   const entryIds = useMemo(
     () =>
@@ -45,6 +47,10 @@ function DirectoryTree({
   )
 
   const selectedIndex = Math.max(entryIds.indexOf(selectedEntryId), 0)
+  const hoverClasses =
+    interactionMode === 'mouse'
+      ? 'hover:bg-[#111111] hover:text-[#FAFAFA]'
+      : ''
 
   const updateSelectedEntry = (entryId: string, notifyParent = false) => {
     setSelectedEntryId(entryId)
@@ -75,6 +81,17 @@ function DirectoryTree({
     }
   }
 
+  useEffect(() => {
+    if (interactionMode !== 'keyboard') {
+      return
+    }
+
+    const target = entryRefs.current.get(selectedEntryId)
+    if (target !== undefined) {
+      target.scrollIntoView({ block: 'nearest' })
+    }
+  }, [interactionMode, selectedEntryId])
+
   return (
     <div
       aria-label="Topic directory"
@@ -84,16 +101,19 @@ function DirectoryTree({
       onKeyDown={(event) => {
         if (event.key === 'ArrowDown') {
           event.preventDefault()
+          setInteractionMode('keyboard')
           selectByOffset(1)
         }
 
         if (event.key === 'ArrowUp') {
           event.preventDefault()
+          setInteractionMode('keyboard')
           selectByOffset(-1)
         }
 
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
+          setInteractionMode('keyboard')
           activateSelectedEntry(selectedEntryId)
         }
       }}
@@ -114,11 +134,24 @@ function DirectoryTree({
               return (
                 <button
                   key={algorithm.id}
+                  ref={(node) => {
+                    if (node === null) {
+                      entryRefs.current.delete(entryId)
+                    } else {
+                      entryRefs.current.set(entryId, node)
+                    }
+                  }}
                   className={[
                     'block w-full max-w-[720px] border-0 px-4 py-0.5 text-left font-mono text-[0.98rem] outline-none transition-colors',
-                    isSelected ? 'bg-[#111111] text-[#FAFAFA]' : 'bg-transparent text-[#111111] hover:bg-[#111111] hover:text-[#FAFAFA]',
+                    isSelected
+                      ? 'bg-[#111111] text-[#FAFAFA]'
+                      : `bg-transparent text-[#111111] ${hoverClasses}`,
                   ].join(' ')}
                   onClick={() => activateSelectedEntry(entryId)}
+                  onMouseEnter={() => {
+                    setInteractionMode('mouse')
+                    updateSelectedEntry(entryId)
+                  }}
                   onFocus={() => updateSelectedEntry(entryId)}
                   type="button"
                 >
