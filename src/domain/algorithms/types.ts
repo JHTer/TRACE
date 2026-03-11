@@ -538,6 +538,128 @@ type GraphEditorState = Readonly<{
   validation: GraphEditorValidation | null
 }>
 
+type FlowNetworkAlgorithmId =
+  | 'flow-networks'
+  | 'residual-graphs'
+  | 'augmenting-paths'
+  | 'ford-fulkerson-algorithm'
+  | 'minimum-cut'
+  | 'maximum-flow-minimum-cut-theorem'
+  | 'bipartite-matching'
+
+type FlowNodeRole = 'source' | 'sink' | 'internal' | 'left-partition' | 'right-partition'
+
+type FlowEdgeKind = 'original' | 'forward-residual' | 'reverse-residual' | 'matching'
+
+type FlowNode = Readonly<{
+  id: string
+  label: string
+  x: number
+  y: number
+  order: number
+  role: FlowNodeRole
+}>
+
+type FlowEdge = Readonly<{
+  id: string
+  from: string
+  to: string
+  capacity: number
+  flow: number
+  kind: FlowEdgeKind
+  label?: string
+  relatedEdgeId?: string
+}>
+
+type FlowModel = Readonly<{
+  nodes: readonly FlowNode[]
+  edges: readonly FlowEdge[]
+  sourceNodeId: string | null
+  sinkNodeId: string | null
+}>
+
+type FlowPseudocodeLine = Readonly<{
+  lineNumber: number
+  text: string
+}>
+
+type FlowPanelRow = Readonly<{
+  label: string
+  value: string
+}>
+
+type FlowPanelSection = Readonly<{
+  title: string
+  rows: readonly FlowPanelRow[]
+}>
+
+type FlowEditorSelection = Readonly<{
+  nodeId: string | null
+  edgeId: string | null
+}>
+
+type FlowEditorValidationCode =
+  | 'node-limit'
+  | 'self-loop'
+  | 'duplicate-edge'
+  | 'missing-source'
+  | 'missing-sink'
+  | 'source-sink-same'
+  | 'invalid-capacity'
+  | 'no-augmenting-path'
+  | 'empty-graph'
+
+type FlowEditorValidation = Readonly<{
+  code: FlowEditorValidationCode
+  message: string
+}>
+
+type FlowEditorState = Readonly<{
+  mode: GraphEditorMode
+  maxNodeCount: number
+  selection: FlowEditorSelection
+  validation: FlowEditorValidation | null
+}>
+
+type FlowPreset = Readonly<{
+  id: string
+  label: string
+}>
+
+type FlowComplexityProfile = Readonly<{
+  time: string
+  space: string
+  note: string
+}>
+
+type FlowFrame = Readonly<{
+  executedLines: readonly number[]
+  operationText: string
+  detailText: string
+  originalNetwork: FlowModel
+  residualNetwork: FlowModel
+  activeOriginalEdgeIds: readonly string[]
+  activeResidualEdgeIds: readonly string[]
+  activeNodeIds: readonly string[]
+  augmentingPathNodeIds: readonly string[]
+  cutSourceSideNodeIds: readonly string[]
+  cutSinkSideNodeIds: readonly string[]
+  matchingEdgeIds: readonly string[]
+  bottleneckValue: number | null
+  maxFlowValue: number
+  panelSections: readonly FlowPanelSection[]
+  isComplete: boolean
+}>
+
+type FlowTimeline = Readonly<{
+  algorithmId: FlowNetworkAlgorithmId
+  title: string
+  subtitle: string
+  pseudocodeLines: readonly FlowPseudocodeLine[]
+  frames: readonly FlowFrame[]
+  complexityProfile: FlowComplexityProfile
+}>
+
 export type {
   AdvancedSortCounters,
   AdvancedSortFrame,
@@ -558,6 +680,23 @@ export type {
   DynamicProgrammingPseudocodeLine,
   DynamicProgrammingTimeline,
   ElementarySortAlgorithmId,
+  FlowComplexityProfile,
+  FlowEdge,
+  FlowEdgeKind,
+  FlowEditorSelection,
+  FlowEditorState,
+  FlowEditorValidation,
+  FlowEditorValidationCode,
+  FlowFrame,
+  FlowModel,
+  FlowNetworkAlgorithmId,
+  FlowNode,
+  FlowNodeRole,
+  FlowPanelRow,
+  FlowPanelSection,
+  FlowPreset,
+  FlowPseudocodeLine,
+  FlowTimeline,
   GraphAdjacencyEntry,
   GraphAdjacencyMatrix,
   GraphAlgorithmId,

@@ -1059,7 +1059,7 @@ function Topic02AdvancedSortLab({
         <div className="grid min-w-0 gap-0 border-t border-[#E5E5E5] xl:grid-cols-[minmax(0,1fr)_300px]">
           <section className="min-w-0 px-4 py-3">
             <h3 className="font-mono text-[0.9rem] text-[#111111]">Pseudocode</h3>
-            <div className="mt-2 border border-[#E5E5E5] bg-[#FAFAFA] p-1.5 font-mono text-[0.84rem] leading-6">
+            <div className="mt-2 overflow-x-auto border border-[#E5E5E5] bg-[#FAFAFA] p-1.5 font-mono text-[0.84rem] leading-6">
               {timeline.pseudocodeLines.map((line) => {
                 const isCurrent = line.lineNumber === activeLine
 
@@ -1067,7 +1067,7 @@ function Topic02AdvancedSortLab({
                   <div
                     key={line.lineNumber}
                     className={[
-                      'flex gap-3 px-2 py-0.5 transition-colors',
+                      'flex min-w-max gap-3 px-2 py-0.5 transition-colors',
                       isCurrent ? 'bg-[#E5E5E5] text-[#111111]' : 'bg-transparent text-[#666666]',
                     ].join(' ')}
                   >

@@ -37,6 +37,7 @@ const maxNodeCount = 20
 const doubleTapThresholdMs = 320
 const dragMoveThresholdPx = 5
 const deleteThresholdOffsetPx = nodeRadius / 2
+const edgeWeightLabelBoxHeight = 22
 
 const algorithmSubtitle: Record<GraphAlgorithmId, string> = {
   'graph-representation':
@@ -337,45 +338,16 @@ const toDirectedLineEndPoint = (
   }
 }
 
-const toWeightLabelPoint = ({
-  sourcePoint,
-  targetPoint,
-  isDirected,
-  hasReverseDirectedEdge,
-  isEmphasized,
-}: Readonly<{
-  sourcePoint: CanvasPoint
-  targetPoint: CanvasPoint
-  isDirected: boolean
-  hasReverseDirectedEdge: boolean
-  isEmphasized: boolean
-}>): CanvasPoint => {
-  const deltaX = targetPoint.x - sourcePoint.x
-  const deltaY = targetPoint.y - sourcePoint.y
-  const length = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
-  const midpointX = (sourcePoint.x + targetPoint.x) / 2
-  const midpointY = (sourcePoint.y + targetPoint.y) / 2
-
-  if (length === 0) {
-    return { x: midpointX, y: midpointY - 8 }
-  }
-
-  const normalX = -deltaY / length
-  const normalY = deltaX / length
-  const baseOffset = isDirected ? 12 : 10
-  const reverseDirectionOffset = hasReverseDirectedEdge ? 8 : 0
-  const emphasizedOffset = isEmphasized ? 3 : 0
-  const compactEdgeOffset = length < nodeRadius * 3 ? 6 : 0
-  const offset = baseOffset + reverseDirectionOffset + emphasizedOffset + compactEdgeOffset
-
-  return {
-    x: midpointX + normalX * offset,
-    y: midpointY + normalY * offset,
-  }
-}
+const toLineMidPoint = (sourcePoint: CanvasPoint, targetPoint: CanvasPoint): CanvasPoint => ({
+  x: (sourcePoint.x + targetPoint.x) / 2,
+  y: (sourcePoint.y + targetPoint.y) / 2,
+})
 
 const getNodeById = (graph: GraphModel, nodeId: string) =>
   graph.nodes.find((node) => node.id === nodeId) ?? null
+
+const getEdgeById = (graph: GraphModel, edgeId: string | null) =>
+  graph.edges.find((edge) => edge.id === edgeId) ?? null
 
 const updateNodePosition = (
   graph: GraphModel,
@@ -430,9 +402,10 @@ const isGraphTraversalFrame = (
 
 function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithmId }>) {
   const svgRef = useRef<SVGSVGElement | null>(null)
+  const edgeWeightEditorInputRef = useRef<HTMLInputElement | null>(null)
   const suppressCanvasClickRef = useRef(false)
+  const ignoreNextCanvasClickRef = useRef(false)
   const lastNodeTapRef = useRef<Readonly<{ nodeId: string; atMs: number }> | null>(null)
-  const lastEdgeTapRef = useRef<Readonly<{ edgeId: string; atMs: number }> | null>(null)
   const initialSampleGraph = sampleGraphByAlgorithmId[algorithmId]
 
   const [graph, setGraph] = useState<GraphModel>(initialSampleGraph)
@@ -448,6 +421,7 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
     initialSampleGraph.nodes[5]?.id ?? null,
   )
   const [unionFindMode, setUnionFindMode] = useState<UnionFindModeId>('combined')
+  const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null)
   const [edgeWeightInput, setEdgeWeightInput] = useState('1')
   const [dragState, setDragState] = useState<DragState | null>(null)
   const [pendingEdge, setPendingEdge] = useState<PendingEdgeState | null>(null)
@@ -641,6 +615,21 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
   }, [selectedEdge])
 
   useEffect(() => {
+    if (editingEdgeId === null) {
+      return
+    }
+
+    const edgeStillExists = graph.edges.some((edge) => edge.id === editingEdgeId)
+    if (!edgeStillExists) {
+      setEditingEdgeId(null)
+      return
+    }
+
+    edgeWeightEditorInputRef.current?.focus()
+    edgeWeightEditorInputRef.current?.select()
+  }, [editingEdgeId, graph.edges])
+
+  useEffect(() => {
     setIsPlaying(false)
     setLineEventIndex(0)
   }, [algorithmId, graph, startNodeId, targetNodeId, traversalScope, unionFindMode])
@@ -652,7 +641,8 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
 
     setPendingEdge(null)
     lastNodeTapRef.current = null
-    lastEdgeTapRef.current = null
+    setSelection({ nodeId: null, edgeId: null })
+    setEditingEdgeId(null)
   }, [isPlaybackLocked])
 
   useEffect(() => {
@@ -779,10 +769,24 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
     setLineEventIndex(0)
   }
 
+  const suppressNextCanvasClick = () => {
+    suppressCanvasClickRef.current = true
+    window.setTimeout(() => {
+      suppressCanvasClickRef.current = false
+    }, 0)
+  }
+
+  const stopEditingEdgeWeight = () => {
+    setEditingEdgeId(null)
+  }
+
   const togglePlayback = () => {
     if (!canPlayTraversal) {
       return
     }
+
+    setSelection({ nodeId: null, edgeId: null })
+    stopEditingEdgeWeight()
 
     setIsPlaying((isCurrentlyPlaying) => {
       if (isCurrentlyPlaying) {
@@ -890,7 +894,7 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
       return
     }
 
-    lastEdgeTapRef.current = null
+    stopEditingEdgeWeight()
     setSelection({ nodeId, edgeId: null })
     setValidation(null)
 
@@ -925,37 +929,56 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
     }
   }
 
-  const handleEdgeTap = (edgeId: string) => {
+  const handleEdgeSelect = (edgeId: string) => {
     if (editorState.mode !== 'build') {
       return
     }
 
     lastNodeTapRef.current = null
-    const nowMs = Date.now()
-    const lastTap = lastEdgeTapRef.current
-
-    if (
-      lastTap !== null &&
-      lastTap.edgeId === edgeId &&
-      nowMs - lastTap.atMs <= doubleTapThresholdMs
-    ) {
-      setGraph((currentGraph) => removeEdge(currentGraph, edgeId))
+    if (selection.edgeId === edgeId) {
       setSelection({ nodeId: null, edgeId: null })
-      setValidation(null)
-      lastEdgeTapRef.current = null
+      stopEditingEdgeWeight()
+    } else {
+      setSelection({ nodeId: null, edgeId })
+      stopEditingEdgeWeight()
+    }
+    setValidation(null)
+  }
+
+  const deleteEdgeById = (edgeId: string) => {
+    if (editorState.mode !== 'build') {
       return
     }
 
-    lastEdgeTapRef.current = {
-      edgeId,
-      atMs: nowMs,
+    setGraph((currentGraph) => removeEdge(currentGraph, edgeId))
+    setSelection({ nodeId: null, edgeId: null })
+    setValidation(null)
+    stopEditingEdgeWeight()
+  }
+
+  const startEdgeWeightEditing = (edgeId: string) => {
+    if (editorState.mode !== 'build' || !isWeightedGraphMode) {
+      return
     }
+
+    const edge = getEdgeById(graph, edgeId)
+    if (edge === null) {
+      return
+    }
+
     setSelection({ nodeId: null, edgeId })
+    setEdgeWeightInput(String(edge.weight))
+    setEditingEdgeId(edgeId)
     setValidation(null)
   }
 
   const handleCanvasClick = (event: ReactMouseEvent<SVGRectElement>) => {
     if (editorState.mode !== 'build') {
+      return
+    }
+
+    if (ignoreNextCanvasClickRef.current) {
+      ignoreNextCanvasClickRef.current = false
       return
     }
 
@@ -969,6 +992,19 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
       return
     }
 
+    if (editingEdgeId !== null) {
+      cancelEdgeWeightEditing()
+      return
+    }
+
+    if (selection.nodeId !== null || selection.edgeId !== null) {
+      setSelection({ nodeId: null, edgeId: null })
+      stopEditingEdgeWeight()
+      setValidation(null)
+      return
+    }
+
+    stopEditingEdgeWeight()
     const point = toCanvasPoint(event.nativeEvent, svgRef.current)
     addNodeAt(point)
   }
@@ -992,6 +1028,7 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
     const point = toCanvasPoint(event.nativeEvent, svgRef.current)
     setSelection({ nodeId, edgeId: null })
     setValidation(null)
+    stopEditingEdgeWeight()
     setDragState({
       pointerId: event.pointerId,
       nodeId,
@@ -1068,10 +1105,7 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
     }
 
     setDragState(null)
-    suppressCanvasClickRef.current = true
-    window.setTimeout(() => {
-      suppressCanvasClickRef.current = false
-    }, 0)
+    suppressNextCanvasClick()
   }
 
   const handleCanvasPointerUp = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -1093,12 +1127,13 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
     }
   }
 
-  const applySelectedEdgeWeight = () => {
-    if (selectedEdge === null) {
+  const applyEdgeWeight = (edgeId: string, nextWeightInput: string) => {
+    const edgeToUpdate = getEdgeById(graph, edgeId)
+    if (edgeToUpdate === null) {
       return
     }
 
-    const parsedWeight = Number(edgeWeightInput)
+    const parsedWeight = Number(nextWeightInput)
     if (!Number.isFinite(parsedWeight)) {
       setValidation({
         code: 'negative-edge',
@@ -1110,12 +1145,40 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
     setGraph((currentGraph) => ({
       ...currentGraph,
       edges: currentGraph.edges.map((edge) =>
-        edge.id === selectedEdge.id
+        edge.id === edgeToUpdate.id
           ? { ...edge, weight: parsedWeight }
           : edge,
       ),
     }))
     setValidation(null)
+    setSelection({ nodeId: null, edgeId: edgeToUpdate.id })
+    stopEditingEdgeWeight()
+  }
+
+  const submitEdgeWeightEditing = () => {
+    if (editingEdgeId === null) {
+      return
+    }
+
+    applyEdgeWeight(editingEdgeId, edgeWeightInput)
+  }
+
+  const cancelEdgeWeightEditing = () => {
+    if (editingEdgeId === null) {
+      return
+    }
+
+    const editingEdgeCurrent = getEdgeById(graph, editingEdgeId)
+    setSelection({ nodeId: null, edgeId: editingEdgeId })
+    setValidation(null)
+    setEditingEdgeId(null)
+    setEdgeWeightInput(editingEdgeCurrent === null ? '1' : String(editingEdgeCurrent.weight))
+  }
+
+  const handleEdgeWeightEditorBlur = () => {
+    ignoreNextCanvasClickRef.current = true
+    suppressNextCanvasClick()
+    submitEdgeWeightEditing()
   }
 
   const clearGraph = () => {
@@ -1127,7 +1190,7 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
     setDragState(null)
     setPendingEdge(null)
     lastNodeTapRef.current = null
-    lastEdgeTapRef.current = null
+    stopEditingEdgeWeight()
   }
 
   const resetToSample = () => {
@@ -1141,7 +1204,7 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
     setDragState(null)
     setPendingEdge(null)
     lastNodeTapRef.current = null
-    lastEdgeTapRef.current = null
+    stopEditingEdgeWeight()
   }
 
   const discoveredNodeIds = new Set(traversalFrame?.discoveredNodeIds ?? [])
@@ -1177,13 +1240,6 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
 
   const pendingEdgeSourceNode =
     pendingEdge === null ? null : getNodeById(graph, pendingEdge.sourceNodeId)
-  const directedEdgeKeySet = useMemo(
-    () =>
-      new Set(
-        displayGraph.edges.map((edge) => createDirectedEdgeKey(edge.from, edge.to)),
-      ),
-    [displayGraph.edges],
-  )
   const finalHighlightedNodeIds = useMemo(() => {
     if (!isTraversalAlgorithm || traversalFrame?.isComplete !== true) {
       return new Set<string>()
@@ -1575,7 +1631,7 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
             <div className="min-w-0 border-b border-[#E5E5E5] lg:border-b-0 lg:border-r lg:border-[#E5E5E5]">
               <section className="px-2 py-2">
                 <div className="font-mono text-[0.74rem] tracking-[0.08em] text-[#666666]">PSEUDOCODE</div>
-                <div className="mt-2 space-y-1">
+                <div className="mt-2 space-y-1 overflow-x-auto">
                   {pseudocodeLines.map((line) => {
                     const isActive = line.lineNumber === activeLineNumber
                     const isHighlighted = highlightedLineNumbers.has(line.lineNumber)
@@ -1583,7 +1639,7 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
                       <div
                         key={`${algorithmId}-line-${line.lineNumber}`}
                         className={[
-                          'flex items-start gap-2 border-l-2 px-2 py-1 font-mono text-[0.8rem] leading-5 transition-colors duration-150',
+                          'flex min-w-max items-start gap-2 border-l-2 px-2 py-1 font-mono text-[0.8rem] leading-5 transition-colors duration-150',
                           isActive
                             ? 'border-l-[#111111] bg-[#F4F4F4] font-medium text-[#111111]'
                             : isHighlighted
@@ -1715,46 +1771,6 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
                   </div>
                 ) : null}
 
-                {isWeightedGraphMode ? (
-                  <div className="absolute right-2 top-10 z-20 w-[180px] border border-[#E5E5E5] bg-[rgba(255,255,255,0.94)] px-2 py-1.5">
-                    <div className="font-mono text-[0.7rem] tracking-[0.08em] text-[#666666]">EDGE WEIGHT</div>
-                    {selectedEdge === null ? (
-                      <div className="mt-1 font-mono text-[0.72rem] text-[#999999]">
-                        select an edge to edit weight
-                      </div>
-                    ) : (
-                      <div className="mt-1 space-y-1">
-                        <div className="font-mono text-[0.72rem] text-[#666666]">
-                          {labelByNodeId[selectedEdge.from] ?? selectedEdge.from}
-                          {' -> '}
-                          {labelByNodeId[selectedEdge.to] ?? selectedEdge.to}
-                        </div>
-                        <input
-                          className="w-full border border-[#E5E5E5] bg-white px-1.5 py-1 font-mono text-[0.76rem] text-[#111111] disabled:bg-[#F4F4F4]"
-                          disabled={editorState.mode !== 'build'}
-                          onBlur={applySelectedEdgeWeight}
-                          onChange={(event) => setEdgeWeightInput(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault()
-                              applySelectedEdgeWeight()
-                            }
-                          }}
-                          value={edgeWeightInput}
-                        />
-                        <button
-                          className="w-full border border-[#E5E5E5] bg-white px-1.5 py-1 font-mono text-[0.72rem] text-[#111111] transition-colors hover:border-[#111111] disabled:cursor-not-allowed disabled:opacity-40"
-                          disabled={editorState.mode !== 'build' || selectedEdge === null}
-                          onClick={applySelectedEdgeWeight}
-                          type="button"
-                        >
-                          Apply Weight
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-
                 {isTraversalAlgorithm ? (
                   <div className="pointer-events-none absolute bottom-2 right-2 z-20 space-y-1 border border-[#E5E5E5] bg-[rgba(255,255,255,0.84)] px-2 py-1.5 font-mono text-[0.68rem] text-[#666666]">
                     <div>
@@ -1824,19 +1840,19 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
                     const isPathEdge = reconstructedPathEdgeIds.has(edge.id)
                     const isResultEdge = finalHighlightedEdgeIds.has(edge.id)
                     const shouldDeemphasizeEdge = hasFinalResultFocus && !isResultEdge
-                    const hasReverseDirectedEdge =
-                      isDirectedGraphMode &&
-                      directedEdgeKeySet.has(createDirectedEdgeKey(edge.to, edge.from))
                     const directedEdgeEndPoint = isDirectedGraphMode
                       ? toDirectedLineEndPoint(leftNode, rightNode)
                       : { x: rightNode.x, y: rightNode.y }
-                    const weightLabelPoint = toWeightLabelPoint({
-                      sourcePoint: { x: leftNode.x, y: leftNode.y },
-                      targetPoint: directedEdgeEndPoint,
-                      isDirected: isDirectedGraphMode,
-                      hasReverseDirectedEdge,
-                      isEmphasized: isActive || isTreeEdge || isPathEdge || isResultEdge,
-                    })
+                    const isEditingThisEdge =
+                      editorState.mode === 'build' &&
+                      isWeightedGraphMode &&
+                      editingEdgeId === edge.id
+                    const weightText = isEditingThisEdge ? edgeWeightInput : `${edge.weight}`
+                    const weightLabelBoxWidth = Math.max(56, weightText.length * 9 + 20)
+                    const weightLabelPoint = toLineMidPoint(
+                      { x: leftNode.x, y: leftNode.y },
+                      directedEdgeEndPoint,
+                    )
 
                     let stroke = shouldDeemphasizeEdge ? '#ECECEC' : '#E5E5E5'
                     let strokeWidth = shouldDeemphasizeEdge ? 1.2 : 1.4
@@ -1872,13 +1888,13 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
                     return (
                       <g key={edge.id}>
                         <line
-                          onPointerUp={(event) => {
-                            if (editorState.mode !== 'build') {
-                              return
-                            }
-
+                          onClick={(event) => {
                             event.stopPropagation()
-                            handleEdgeTap(edge.id)
+                            handleEdgeSelect(edge.id)
+                          }}
+                          onDoubleClick={(event) => {
+                            event.stopPropagation()
+                            deleteEdgeById(edge.id)
                           }}
                           stroke="transparent"
                           strokeLinecap="round"
@@ -1902,24 +1918,77 @@ function Topic03GraphLab({ algorithmId }: Readonly<{ algorithmId: GraphAlgorithm
                           y2={directedEdgeEndPoint.y}
                         />
                         {isWeightedGraphMode ? (
-                          <text
-                            dominantBaseline="middle"
-                            fill={shouldDeemphasizeEdge ? '#999999' : '#111111'}
-                            fontFamily="'SF Mono', 'JetBrains Mono', Menlo, Monaco, Consolas, monospace"
-                            fontSize={11}
-                            fontWeight={500}
-                            paintOrder="stroke"
-                            pointerEvents="none"
-                            stroke="rgba(250,250,250,0.96)"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={3}
-                            textAnchor="middle"
-                            x={weightLabelPoint.x}
-                            y={weightLabelPoint.y}
-                          >
-                            {edge.weight}
-                          </text>
+                          <>
+                            {isEditingThisEdge ? (
+                              <foreignObject
+                                x={weightLabelPoint.x - weightLabelBoxWidth / 2}
+                                y={weightLabelPoint.y - edgeWeightLabelBoxHeight / 2}
+                                width={weightLabelBoxWidth}
+                                height={edgeWeightLabelBoxHeight}
+                              >
+                                <div className="h-full w-full">
+                                  <input
+                                    ref={edgeWeightEditorInputRef}
+                                    autoFocus
+                                    className="h-full w-full border border-[#111111] bg-white px-1.5 py-0 text-center font-mono text-[0.76rem] text-[#111111] outline-none"
+                                    onBlur={handleEdgeWeightEditorBlur}
+                                    onChange={(event) => setEdgeWeightInput(event.target.value)}
+                                    onClick={(event) => event.stopPropagation()}
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter') {
+                                        event.preventDefault()
+                                        submitEdgeWeightEditing()
+                                      } else if (event.key === 'Escape') {
+                                        event.preventDefault()
+                                        cancelEdgeWeightEditing()
+                                      }
+                                    }}
+                                    type="number"
+                                    value={edgeWeightInput}
+                                  />
+                                </div>
+                              </foreignObject>
+                            ) : (
+                              <>
+                                <rect
+                                  fill="rgba(255,255,255,0.96)"
+                                  height={22}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    handleEdgeSelect(edge.id)
+                                  }}
+                                  onDoubleClick={(event) => {
+                                    event.stopPropagation()
+                                    startEdgeWeightEditing(edge.id)
+                                  }}
+                                  rx={4}
+                                  stroke={isSelected ? '#111111' : '#E5E5E5'}
+                                  width={weightLabelBoxWidth}
+                                  x={weightLabelPoint.x - weightLabelBoxWidth / 2}
+                                  y={weightLabelPoint.y - 11}
+                                  style={{ cursor: 'pointer' }}
+                                />
+                                <text
+                                  dominantBaseline="middle"
+                                  fill={shouldDeemphasizeEdge ? '#999999' : '#111111'}
+                                  fontFamily="'SF Mono', 'JetBrains Mono', Menlo, Monaco, Consolas, monospace"
+                                  fontSize={11}
+                                  fontWeight={500}
+                                  paintOrder="stroke"
+                                  pointerEvents="none"
+                                  stroke="rgba(250,250,250,0.96)"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={3}
+                                  textAnchor="middle"
+                                  x={weightLabelPoint.x}
+                                  y={weightLabelPoint.y}
+                                >
+                                  {edge.weight}
+                                </text>
+                              </>
+                            )}
+                          </>
                         ) : null}
                       </g>
                     )

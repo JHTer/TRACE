@@ -20,11 +20,13 @@ import { Topic02PartitionSelectionLab } from '../components/topic-02/Topic02Part
 import { Topic02StabilityLab } from '../components/topic-02/Topic02StabilityLab.tsx'
 import { Topic03GraphLab } from '../components/topic-03/Topic03GraphLab.tsx'
 import { Topic04DynamicProgrammingLab } from '../components/topic-04/Topic04DynamicProgrammingLab.tsx'
+import { Topic06FlowNetworkLab } from '../components/topic-06'
 import { CommandPalette } from '../components/shell/CommandPalette.tsx'
 import { topicCatalog } from '../content/topics/topicCatalog.ts'
 import {
   dynamicProgrammingDirectoryLabelByAlgorithm,
 } from '../algorithms/dp/index.ts'
+import { flowNetworkDirectoryLabelByAlgorithm } from '../algorithms/flow'
 import {
   quickselectStrategyOptions,
   quicksortVariantOptions,
@@ -32,6 +34,7 @@ import {
 import type {
   DynamicProgrammingAlgorithmId,
   ElementarySortAlgorithmId,
+  FlowNetworkAlgorithmId,
   GraphAlgorithmId,
   PartitionSelectionAlgorithmId,
   QuickselectStrategyId,
@@ -83,6 +86,7 @@ const topic03DirectoryLabelByView: Record<Topic03View, string> = {
 }
 
 type Topic04View = DynamicProgrammingAlgorithmId
+type Topic06View = FlowNetworkAlgorithmId
 
 type ActiveScreen =
   | Readonly<{ kind: 'menu' }>
@@ -90,6 +94,7 @@ type ActiveScreen =
   | Readonly<{ kind: 'topic-2'; view: Topic02View }>
   | Readonly<{ kind: 'topic-3'; view: Topic03View }>
   | Readonly<{ kind: 'topic-4'; view: Topic04View }>
+  | Readonly<{ kind: 'topic-6'; view: Topic06View }>
 
 const workbenchRouteMap: Readonly<Record<string, ActiveScreen>> = {
   'menu:home': { kind: 'menu' },
@@ -130,6 +135,19 @@ const workbenchRouteMap: Readonly<Record<string, ActiveScreen>> = {
   },
   'topic-4:edit-distance': { kind: 'topic-4', view: 'edit-distance' },
   'topic-4:maximum-subarray': { kind: 'topic-4', view: 'maximum-subarray' },
+  'topic-6:flow-networks': { kind: 'topic-6', view: 'flow-networks' },
+  'topic-6:residual-graphs': { kind: 'topic-6', view: 'residual-graphs' },
+  'topic-6:augmenting-paths': { kind: 'topic-6', view: 'augmenting-paths' },
+  'topic-6:ford-fulkerson-algorithm': {
+    kind: 'topic-6',
+    view: 'ford-fulkerson-algorithm',
+  },
+  'topic-6:minimum-cut': { kind: 'topic-6', view: 'minimum-cut' },
+  'topic-6:maximum-flow-minimum-cut-theorem': {
+    kind: 'topic-6',
+    view: 'maximum-flow-minimum-cut-theorem',
+  },
+  'topic-6:bipartite-matching': { kind: 'topic-6', view: 'bipartite-matching' },
 }
 
 const defaultRouteKey = 'menu:home'
@@ -155,7 +173,11 @@ const toRouteKeyForScreen = (screen: ActiveScreen) => {
     return `topic-3:${screen.view}`
   }
 
-  return `topic-4:${screen.view}`
+  if (screen.kind === 'topic-4') {
+    return `topic-4:${screen.view}`
+  }
+
+  return `topic-6:${screen.view}`
 }
 
 const resolveScreenByRouteKey = (routeKey: string): ActiveScreen =>
@@ -384,7 +406,9 @@ function IndexPage() {
   const [quickselectStrategy, setQuickselectStrategy] =
     useState<QuickselectStrategyId>('lomuto')
   const pageMaxWidthClass =
-    activeScreen.kind === 'topic-3' || activeScreen.kind === 'topic-4'
+    activeScreen.kind === 'topic-3' ||
+    activeScreen.kind === 'topic-4' ||
+    activeScreen.kind === 'topic-6'
       ? 'max-w-[1200px]'
       : 'max-w-[980px]'
 
@@ -474,6 +498,10 @@ function IndexPage() {
       return dynamicProgrammingDirectoryLabelByAlgorithm[activeScreen.view]
     }
 
+    if (activeScreen.kind === 'topic-6') {
+      return flowNetworkDirectoryLabelByAlgorithm[activeScreen.view]
+    }
+
     if (activeScreen.kind !== 'topic-2') {
       return null
     }
@@ -539,6 +567,10 @@ function IndexPage() {
       return dynamicProgrammingDirectoryLabelByAlgorithm[activeScreen.view]
     }
 
+    if (activeScreen.kind === 'topic-6') {
+      return flowNetworkDirectoryLabelByAlgorithm[activeScreen.view]
+    }
+
     if (activeScreen.view === 'quicksort') {
       const selectedVariantLabel =
         quicksortVariantOptions.find((option) => option.id === quicksortVariant)?.label ??
@@ -594,8 +626,10 @@ function IndexPage() {
                   )
                 ) : activeScreen.kind === 'topic-3' ? (
                   <Topic03GraphLab algorithmId={activeScreen.view} />
-                ) : (
+                ) : activeScreen.kind === 'topic-4' ? (
                   <Topic04DynamicProgrammingLab algorithmId={activeScreen.view} />
+                ) : (
+                  <Topic06FlowNetworkLab algorithmId={activeScreen.view} />
                 )}
               </>
             )}

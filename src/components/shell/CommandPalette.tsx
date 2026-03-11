@@ -40,6 +40,13 @@ const algorithmAliasMap: Readonly<Record<string, readonly string[]>> = {
   'longest-common-subsequence': ['dp', 'lcs', 'sequence match'],
   'edit-distance': ['dp', 'levenshtein', 'string edits'],
   'maximum-subarray': ['dp', 'kadane', 'max subarray', 'best segment'],
+  'flow-networks': ['max flow', 'capacity', 'conservation'],
+  'residual-graphs': ['residual', 'reverse edges', 'residual network'],
+  'augmenting-paths': ['augmenting path', 'bottleneck'],
+  'ford-fulkerson-algorithm': ['ford fulkerson', 'max flow', 'augment'],
+  'minimum-cut': ['min cut', 'cut'],
+  'maximum-flow-minimum-cut-theorem': ['max flow min cut', 'theorem'],
+  'bipartite-matching': ['matching', 'bipartite', 'reduction'],
 }
 
 const normalizeSearchText = (value: string) =>
