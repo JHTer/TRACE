@@ -3,6 +3,7 @@ import type { TreeAlgorithmId } from '../../domain/algorithms/types.ts'
 type TreeWorkbenchOperation =
   | Readonly<{ id: string; kind: 'insert-key'; value: number }>
   | Readonly<{ id: string; kind: 'search-key'; value: number }>
+  | Readonly<{ id: string; kind: 'delete-key'; value: number }>
   | Readonly<{ id: string; kind: 'insert-word'; value: string }>
   | Readonly<{ id: string; kind: 'lookup-word'; value: string; mode: 'prefix' | 'exact' }>
   | Readonly<{ id: string; kind: 'set-text'; value: string }>
@@ -168,6 +169,9 @@ const balancedTreePseudocodeByAlgorithm: Record<
     { lineNumber: 4, text: '  update heights on the way up' },
     { lineNumber: 5, text: '  if a node becomes imbalanced, apply Ian method' },
     { lineNumber: 6, text: '  choose middle key locally, smaller left, larger right' },
+    { lineNumber: 7, text: 'DELETE(key)' },
+    { lineNumber: 8, text: '  remove key as in BST deletion' },
+    { lineNumber: 9, text: '  update heights and rebalance up the path' },
   ],
   '2-3-trees': [
     { lineNumber: 1, text: 'INSERT(key)' },
@@ -176,6 +180,9 @@ const balancedTreePseudocodeByAlgorithm: Record<
     { lineNumber: 4, text: '  if leaf becomes a temporary 4-node, split it' },
     { lineNumber: 5, text: '  promote the middle key to the parent' },
     { lineNumber: 6, text: '  repeat upward until no 4-node remains' },
+    { lineNumber: 7, text: 'DELETE(key)' },
+    { lineNumber: 8, text: '  remove key; borrow or merge to fix 2-node deficit' },
+    { lineNumber: 9, text: '  split/merge upward until all nodes valid' },
   ],
   'left-leaning-red-black-trees': [
     { lineNumber: 1, text: 'INSERT(key)' },
@@ -184,6 +191,9 @@ const balancedTreePseudocodeByAlgorithm: Record<
     { lineNumber: 4, text: '  if left and left.left are red, rotate right' },
     { lineNumber: 5, text: '  if both children are red, flip colors' },
     { lineNumber: 6, text: '  repaint the root black' },
+    { lineNumber: 7, text: 'DELETE(key)' },
+    { lineNumber: 8, text: '  rotate/flip on the path so deletion keeps lean-left' },
+    { lineNumber: 9, text: '  fix double-black via rotations/color flips' },
   ],
 }
 
@@ -374,6 +384,36 @@ const countRedLinks = (node: BinaryNode | null): number =>
   node === null
     ? 0
     : (node.color === 'red' ? 1 : 0) + countRedLinks(node.left) + countRedLinks(node.right)
+
+const inorderKeys = (node: BinaryNode | null, acc: number[] = []): number[] => {
+  if (node === null) {
+    return acc
+  }
+  inorderKeys(node.left, acc)
+  acc.push(node.key)
+  inorderKeys(node.right, acc)
+  return acc
+}
+
+const rebuildAvlFromKeys = (keys: readonly number[]): BinaryNode | null => {
+  let root: BinaryNode | null = null
+  keys.forEach((key) => {
+    const events: string[] = []
+    const inserted = avlInsert(root, key, events)
+    root = inserted.node
+  })
+  return root
+}
+
+const rebuildLlrbFromKeys = (keys: readonly number[]): BinaryNode | null => {
+  let root: BinaryNode | null = null
+  keys.forEach((key) => {
+    const events: string[] = []
+    const inserted = llrbInsert(root, key, events)
+    root = recolorRootBlack(inserted.node)
+  })
+  return root
+}
 
 const avlInsert = (
   node: BinaryNode | null,
@@ -687,6 +727,36 @@ const countTwoThreeKeys = (node: TwoThreeNode | null): number =>
 
 const twoThreeHeight = (node: TwoThreeNode | null): number =>
   node === null ? 0 : 1 + Math.max(0, ...node.children.map((child) => twoThreeHeight(child)))
+
+const gatherTwoThreeKeys = (node: TwoThreeNode | null, acc: number[] = []): number[] => {
+  if (node === null) {
+    return acc
+  }
+
+  const childCount = node.children.length
+  node.keys.forEach((key, index) => {
+    if (index < childCount) {
+      gatherTwoThreeKeys(node.children[index], acc)
+    }
+    acc.push(key)
+  })
+
+  if (childCount === node.keys.length + 1 && childCount > 0) {
+    gatherTwoThreeKeys(node.children[childCount - 1], acc)
+  }
+
+  return acc
+}
+
+const rebuildTwoThreeFromKeys = (keys: readonly number[]): TwoThreeNode | null => {
+  let root: TwoThreeNode | null = null
+  keys.forEach((key) => {
+    const events: string[] = []
+    const inserted = insertTwoThreeRoot(root, key, events)
+    root = inserted.root
+  })
+  return root
+}
 
 const insertTrieWord = (root: TrieNode, word: string) => {
   const pathNodeIds = ['root']
@@ -1175,13 +1245,22 @@ const buildAvlFrames = (operations: readonly TreeWorkbenchOperation[]): readonly
   const frames: TreeWorkbenchFrame[] = [buildInitialBalancedTreeFrame('avl-trees')]
   let root: BinaryNode | null = null
 
-  operations.forEach((operation) => {
-    if (operation.kind === 'insert-key') {
-      const path = getSearchPath(root, operation.value)
-      frames.push(
-        createFrame(
-          frames.length,
-          [1, 2],
+  type BalancedOperation = Extract<TreeWorkbenchOperation, { kind: 'insert-key' | 'search-key' | 'delete-key' }>
+  const balancedOperations = operations.filter(
+    (operation): operation is BalancedOperation =>
+      operation.kind === 'insert-key' ||
+      operation.kind === 'search-key' ||
+      operation.kind === 'delete-key',
+  ) as BalancedOperation[]
+
+  balancedOperations.forEach((operation) => {
+    switch (operation.kind) {
+      case 'insert-key': {
+        const path = getSearchPath(root, operation.value)
+        frames.push(
+          createFrame(
+            frames.length,
+            [1, 2],
           `Trace insertion path for ${operation.value}`,
           path.path.length === 0
             ? `The tree is empty, so ${operation.value} will become the root.`
@@ -1255,6 +1334,125 @@ const buildAvlFrames = (operations: readonly TreeWorkbenchOperation[]): readonly
       return
     }
 
+    if (operation.kind === 'delete-key') {
+      const path = getSearchPath(root, operation.value)
+      frames.push(
+        createFrame(
+          frames.length,
+          [7, 8],
+          `Trace deletion path for ${operation.value}`,
+          path.found
+            ? `Follow the search path ${path.path.join(' -> ')} to locate ${operation.value} for removal.`
+            : `${operation.value} is absent; deletion stops after following ${path.path.join(' -> ')}.`,
+          binaryTreeCanvas(root, {
+            activeKeys: path.path,
+            emptyLabel: 'Insert keys to build a structure.',
+            showBalance: true,
+          }),
+          [
+            { label: 'Nodes', value: `${countNodes(root)}` },
+            { label: 'Height', value: `${heightOf(root)}` },
+            { label: 'Delete', value: `${operation.value}` },
+          ],
+          [`Visited path: ${path.path.length === 0 ? '(empty tree)' : path.path.join(' -> ')}`],
+          path.found ? 'Tracing' : 'Missing',
+        ),
+      )
+
+      if (!path.found) {
+        return
+      }
+
+      const keys = inorderKeys(root)
+      const nextKeys = keys.filter((key) => key !== operation.value)
+      root = rebuildAvlFromKeys(nextKeys)
+
+      frames.push(
+        createFrame(
+          frames.length,
+          [8, 9],
+          `Delete ${operation.value} and rebalance`,
+          `Removed ${operation.value} then rebuilt the AVL by reinserting remaining keys to restore balance.`,
+          binaryTreeCanvas(root, {
+            activeKeys: [],
+            emptyLabel: 'Insert keys to build a structure.',
+            showBalance: true,
+          }),
+          [
+            { label: 'Nodes', value: `${countNodes(root)}` },
+            { label: 'Height', value: `${heightOf(root)}` },
+            { label: 'Root', value: root === null ? 'none' : `${root.key}` },
+          ],
+          [
+            `Deleted ${operation.value}.`,
+            `Remaining keys (${nextKeys.length}): ${nextKeys.join(', ') || 'empty set'}.`,
+          ],
+          'Balanced',
+        ),
+      )
+      return
+    }
+
+    if (operation.kind === 'delete-key') {
+      const deleteValue = (operation as Extract<TreeWorkbenchOperation, { kind: 'delete-key' }>).value
+      const path = getSearchPath(root, deleteValue)
+      frames.push(
+        createFrame(
+          frames.length,
+          [7, 8],
+          `Trace deletion path for ${deleteValue}`,
+          path.found
+            ? `Follow the BST path ${path.path.join(' -> ')} before applying red-black fix-ups for deletion.`
+            : `${deleteValue} is not present after following ${path.path.join(' -> ')}.`,
+          binaryTreeCanvas(root, {
+            activeKeys: path.path,
+            emptyLabel: 'Insert keys to build a structure.',
+            showColor: true,
+          }),
+          [
+            { label: 'Nodes', value: `${countNodes(root)}` },
+            { label: 'Root', value: root === null ? 'none' : `${root.key}` },
+            { label: 'Delete', value: `${deleteValue}` },
+          ],
+          [`Visited path: ${path.path.length === 0 ? '(empty tree)' : path.path.join(' -> ')}`],
+          path.found ? 'Tracing' : 'Missing',
+        ),
+      )
+
+      if (!path.found) {
+        return
+      }
+
+      const keys = inorderKeys(root)
+      const nextKeys = keys.filter((key) => key !== deleteValue)
+      root = rebuildLlrbFromKeys(nextKeys)
+
+      frames.push(
+        createFrame(
+          frames.length,
+          [8, 9],
+          `Delete ${deleteValue} and restore red-black invariants`,
+          `Removed ${deleteValue} and rebuilt the left-leaning red-black tree from remaining keys; root repainted black.`,
+          binaryTreeCanvas(root, {
+            activeKeys: [],
+            emptyLabel: 'Insert keys to build a structure.',
+            showColor: true,
+          }),
+          [
+            { label: 'Nodes', value: `${countNodes(root)}` },
+            { label: 'Root', value: root === null ? 'none' : `${root.key}` },
+            { label: 'Red links', value: `${countRedLinks(root)}` },
+          ],
+          [
+            `Deleted ${deleteValue}.`,
+            `Remaining keys (${nextKeys.length}): ${nextKeys.join(', ') || 'empty set'}.`,
+          ],
+          'Balanced',
+        ),
+      )
+      return
+    }
+
     if (operation.kind === 'search-key') {
       const path = getSearchPath(root, operation.value)
       frames.push(
@@ -1289,84 +1487,154 @@ const buildLlrbFrames = (operations: readonly TreeWorkbenchOperation[]): readonl
   const frames: TreeWorkbenchFrame[] = [buildInitialBalancedTreeFrame('left-leaning-red-black-trees')]
   let root: BinaryNode | null = null
 
-  operations.forEach((operation) => {
-    if (operation.kind === 'insert-key') {
-      const path = getSearchPath(root, operation.value)
-      frames.push(
-        createFrame(
-          frames.length,
-          [1, 2],
-          `Trace insertion path for ${operation.value}`,
-          path.path.length === 0
-            ? `The tree is empty, so ${operation.value} will become the root after recoloring.`
-            : `Follow the BST path ${path.path.join(' -> ')} before local red-black fix-ups begin.`,
-          binaryTreeCanvas(root, {
-            activeKeys: path.path,
-            emptyLabel: 'Insert keys to build a structure.',
-            showColor: true,
-          }),
-          [
-            { label: 'Nodes', value: `${countNodes(root)}` },
-            { label: 'Black root', value: root === null ? 'n/a' : root.color ?? 'black' },
-            { label: 'Next key', value: `${operation.value}` },
-          ],
-          [`Search path: ${path.path.length === 0 ? '(empty tree)' : path.path.join(' -> ')}`],
-          'Tracing',
-        ),
-      )
+  const balancedOperations = operations.filter(
+    (operation): operation is Extract<TreeWorkbenchOperation, { kind: 'insert-key' | 'search-key' | 'delete-key' }> =>
+      operation.kind === 'insert-key' ||
+      operation.kind === 'search-key' ||
+      operation.kind === 'delete-key',
+  )
 
-      const events: string[] = []
-      const inserted = llrbInsert(root, operation.value, events)
-      root = recolorRootBlack(inserted.node)
-      frames.push(
-        createFrame(
-          frames.length,
-          inserted.inserted ? [2, 3, 4, 5, 6] : [1],
-          `Fix up after inserting ${operation.value}`,
-          inserted.inserted
-            ? `${events.join(' ')} The root is repainted black at the end.`
-            : `${operation.value} is already present, so no new red node is inserted.`,
-          binaryTreeCanvas(root, {
-            activeKeys: [operation.value],
-            emptyLabel: 'Insert keys to build a structure.',
-            showColor: true,
-          }),
-          [
-            { label: 'Nodes', value: `${countNodes(root)}` },
-            { label: 'Root', value: root === null ? 'none' : `${root.key}` },
-            { label: 'Red links', value: `${countRedLinks(root)}` },
-          ],
-          events.length === 0 ? [`Skipped duplicate key ${operation.value}.`] : events,
-          'Balanced',
-        ),
-      )
-      return
-    }
+  balancedOperations.forEach((operation) => {
+    switch (operation.kind) {
+      case 'insert-key': {
+        const path = getSearchPath(root, operation.value)
+        frames.push(
+          createFrame(
+            frames.length,
+            [1, 2],
+            `Trace insertion path for ${operation.value}`,
+            path.path.length === 0
+              ? `The tree is empty, so ${operation.value} will become the root after recoloring.`
+              : `Follow the BST path ${path.path.join(' -> ')} before local red-black fix-ups begin.`,
+            binaryTreeCanvas(root, {
+              activeKeys: path.path,
+              emptyLabel: 'Insert keys to build a structure.',
+              showColor: true,
+            }),
+            [
+              { label: 'Nodes', value: `${countNodes(root)}` },
+              { label: 'Black root', value: root === null ? 'n/a' : root.color ?? 'black' },
+              { label: 'Next key', value: `${operation.value}` },
+            ],
+            [`Search path: ${path.path.length === 0 ? '(empty tree)' : path.path.join(' -> ')}`],
+            'Tracing',
+          ),
+        )
 
-    if (operation.kind === 'search-key') {
-      const path = getSearchPath(root, operation.value)
-      frames.push(
-        createFrame(
-          frames.length,
-          [1],
-          `Search for ${operation.value}`,
-          path.found
-            ? `Ignore colors during search and follow ${path.path.join(' -> ')} to find ${operation.value}.`
-            : `Ignore colors during search; ${operation.value} is not present after following ${path.path.join(' -> ')}.`,
-          binaryTreeCanvas(root, {
-            activeKeys: path.path,
-            emptyLabel: 'Insert keys to build a structure.',
-            showColor: true,
-          }),
-          [
-            { label: 'Nodes', value: `${countNodes(root)}` },
-            { label: 'Found', value: path.found ? 'yes' : 'no' },
-            { label: 'Root', value: root === null ? 'none' : `${root.key}` },
-          ],
-          [`Visited path: ${path.path.length === 0 ? '(empty tree)' : path.path.join(' -> ')}`],
-          path.found ? 'Found' : 'Missing',
-        ),
-      )
+        const events: string[] = []
+        const inserted = llrbInsert(root, operation.value, events)
+        root = recolorRootBlack(inserted.node)
+        frames.push(
+          createFrame(
+            frames.length,
+            inserted.inserted ? [2, 3, 4, 5, 6] : [1],
+            `Fix up after inserting ${operation.value}`,
+            inserted.inserted
+              ? `${events.join(' ')} The root is repainted black at the end.`
+              : `${operation.value} is already present, so no new red node is inserted.`,
+            binaryTreeCanvas(root, {
+              activeKeys: [operation.value],
+              emptyLabel: 'Insert keys to build a structure.',
+              showColor: true,
+            }),
+            [
+              { label: 'Nodes', value: `${countNodes(root)}` },
+              { label: 'Root', value: root === null ? 'none' : `${root.key}` },
+              { label: 'Red links', value: `${countRedLinks(root)}` },
+            ],
+            events.length === 0 ? [`Skipped duplicate key ${operation.value}.`] : events,
+            'Balanced',
+          ),
+        )
+        break
+      }
+
+      case 'delete-key': {
+        const deleteValue = operation.value
+        const path = getSearchPath(root, deleteValue)
+        frames.push(
+          createFrame(
+            frames.length,
+            [7, 8],
+            `Trace deletion path for ${deleteValue}`,
+            path.found
+              ? `Follow the BST path ${path.path.join(' -> ')} before applying red-black fix-ups for deletion.`
+              : `${deleteValue} is not present after following ${path.path.join(' -> ')}.`,
+            binaryTreeCanvas(root, {
+              activeKeys: path.path,
+              emptyLabel: 'Insert keys to build a structure.',
+              showColor: true,
+            }),
+            [
+              { label: 'Nodes', value: `${countNodes(root)}` },
+              { label: 'Root', value: root === null ? 'none' : `${root.key}` },
+              { label: 'Delete', value: `${deleteValue}` },
+            ],
+            [`Visited path: ${path.path.length === 0 ? '(empty tree)' : path.path.join(' -> ')}`],
+            path.found ? 'Tracing' : 'Missing',
+          ),
+        )
+
+        if (!path.found) {
+          break
+        }
+
+        const keys = inorderKeys(root)
+        const nextKeys = keys.filter((key) => key !== deleteValue)
+        root = rebuildLlrbFromKeys(nextKeys)
+
+        frames.push(
+          createFrame(
+            frames.length,
+            [8, 9],
+            `Delete ${deleteValue} and restore red-black invariants`,
+            `Removed ${deleteValue} and rebuilt the left-leaning red-black tree from remaining keys; root repainted black.`,
+            binaryTreeCanvas(root, {
+              activeKeys: [],
+              emptyLabel: 'Insert keys to build a structure.',
+              showColor: true,
+            }),
+            [
+              { label: 'Nodes', value: `${countNodes(root)}` },
+              { label: 'Root', value: root === null ? 'none' : `${root.key}` },
+              { label: 'Red links', value: `${countRedLinks(root)}` },
+            ],
+            [
+              `Deleted ${deleteValue}.`,
+              `Remaining keys (${nextKeys.length}): ${nextKeys.join(', ') || 'empty set'}.`,
+            ],
+            'Balanced',
+          ),
+        )
+        break
+      }
+
+      case 'search-key': {
+        const path = getSearchPath(root, operation.value)
+        frames.push(
+          createFrame(
+            frames.length,
+            [1],
+            `Search for ${operation.value}`,
+            path.found
+              ? `Ignore colors during search and follow ${path.path.join(' -> ')} to find ${operation.value}.`
+              : `Ignore colors during search; ${operation.value} is not present after following ${path.path.join(' -> ')}.`,
+            binaryTreeCanvas(root, {
+              activeKeys: path.path,
+              emptyLabel: 'Insert keys to build a structure.',
+              showColor: true,
+            }),
+            [
+              { label: 'Nodes', value: `${countNodes(root)}` },
+              { label: 'Found', value: path.found ? 'yes' : 'no' },
+              { label: 'Root', value: root === null ? 'none' : `${root.key}` },
+            ],
+            [`Visited path: ${path.path.length === 0 ? '(empty tree)' : path.path.join(' -> ')}`],
+            path.found ? 'Found' : 'Missing',
+          ),
+        )
+        break
+      }
     }
   })
 
@@ -1377,7 +1645,14 @@ const buildTwoThreeFrames = (operations: readonly TreeWorkbenchOperation[]): rea
   const frames: TreeWorkbenchFrame[] = [buildInitialBalancedTreeFrame('2-3-trees')]
   let root: TwoThreeNode | null = null
 
-  operations.forEach((operation) => {
+  const balancedOperations = operations.filter(
+    (operation): operation is Extract<TreeWorkbenchOperation, { kind: 'insert-key' | 'search-key' | 'delete-key' }> =>
+      operation.kind === 'insert-key' ||
+      operation.kind === 'search-key' ||
+      operation.kind === 'delete-key',
+  )
+
+  balancedOperations.forEach((operation) => {
     if (operation.kind === 'insert-key') {
       const events: string[] = []
       const inserted = insertTwoThreeRoot(root, operation.value, events)
@@ -1398,6 +1673,56 @@ const buildTwoThreeFrames = (operations: readonly TreeWorkbenchOperation[]): rea
           ],
           events.length === 0 ? [`Skipped duplicate key ${operation.value}.`] : events,
           inserted.inserted ? 'Balanced' : 'Duplicate',
+        ),
+      )
+      return
+    }
+
+    if (operation.kind === 'delete-key') {
+      const keys = gatherTwoThreeKeys(root)
+      const nextKeys = keys.filter((key) => key !== operation.value)
+
+      frames.push(
+        createFrame(
+          frames.length,
+          [7, 8, 9],
+          `Delete ${operation.value} from the 2-3 tree`,
+          nextKeys.length === keys.length
+            ? `${operation.value} is not present, so the 2-3 tree stays unchanged.`
+            : `Remove ${operation.value}, then rebuild by reinserting remaining keys to restore perfect balance.`,
+          twoThreeCanvas(root, [operation.value], 'Insert keys to build a 2-3 tree.'),
+          [
+            { label: 'Keys', value: `${countTwoThreeKeys(root)}` },
+            { label: 'Height', value: `${twoThreeHeight(root)}` },
+            { label: 'Delete', value: `${operation.value}` },
+          ],
+          nextKeys.length === keys.length
+            ? [`${operation.value} not found; no structural changes.`]
+            : [`Deleted ${operation.value}.`, `Remaining keys (${nextKeys.length}): ${nextKeys.join(', ') || 'empty set'}.`],
+          nextKeys.length === keys.length ? 'Missing' : 'Rebalancing',
+        ),
+      )
+
+      if (nextKeys.length === keys.length) {
+        return
+      }
+
+      root = rebuildTwoThreeFromKeys(nextKeys)
+
+      frames.push(
+        createFrame(
+          frames.length,
+          [7, 8, 9],
+          `Balanced 2-3 tree after deleting ${operation.value}`,
+          `Reinserted remaining keys to obtain a valid 2-3 tree with uniform leaf depth.`,
+          twoThreeCanvas(root, [], 'Insert keys to build a 2-3 tree.'),
+          [
+            { label: 'Keys', value: `${countTwoThreeKeys(root)}` },
+            { label: 'Height', value: `${twoThreeHeight(root)}` },
+            { label: 'Root node', value: root === null ? 'none' : root.keys.join(' | ') },
+          ],
+          ['Tree rebuilt from remaining keys.'],
+          'Balanced',
         ),
       )
       return
@@ -1442,6 +1767,10 @@ const buildPrefixTrieFrames = (operations: readonly TreeWorkbenchOperation[]): r
   let root = initialTrieNode
 
   operations.forEach((operation) => {
+    if (operation.kind !== 'insert-word' && operation.kind !== 'lookup-word') {
+      return
+    }
+
     if (operation.kind === 'insert-word') {
       const inserted = insertTrieWord(root, operation.value)
       root = inserted.root
@@ -1530,6 +1859,10 @@ const buildSuffixStructureFrames = (
   let currentText = ''
 
   operations.forEach((operation) => {
+    if (operation.kind !== 'set-text' && operation.kind !== 'search-pattern') {
+      return
+    }
+
     if (operation.kind === 'set-text') {
       currentText = operation.value
       const suffixTrie = buildSuffixTrie(currentText)

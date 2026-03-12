@@ -304,25 +304,6 @@ function Topic02ElementarySortLab({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [hasLineEvents, lineEventIndex, lastLineEventIndex])
 
-  const applyDraft = () => {
-    const result = parseSortDataset(draft, {
-      maxLength: MAX_TOPIC02_SORT_DATASET_LENGTH,
-      mode: 'comparison',
-    })
-    if (!result.ok) {
-      setValidationError(result.error)
-      return
-    }
-    setValidationError(null)
-    setValues(result.values)
-  }
-
-  const applyPreset = (presetValues: readonly number[]) => {
-    setValidationError(null)
-    setValues(presetValues)
-    setDraft(presetValues.join(', '))
-  }
-
   return (
     <section className="mt-4 space-y-4">
       <div className="space-y-3">

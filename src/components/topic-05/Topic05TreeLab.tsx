@@ -333,7 +333,7 @@ function Topic05TreeLab({ algorithmId }: Readonly<{ algorithmId: TreeAlgorithmId
     setIsPlaying(false)
   }
 
-  const submitNumberOperation = (kind: 'insert-key' | 'search-key') => {
+const submitNumberOperation = (kind: 'insert-key' | 'search-key' | 'delete-key') => {
     const parsedValue = Number.parseInt(numberInput, 10)
     if (!Number.isFinite(parsedValue)) {
       return
@@ -456,10 +456,13 @@ function Topic05TreeLab({ algorithmId }: Readonly<{ algorithmId: TreeAlgorithmId
                   value={numberInput}
                 />
                 <button className={buttonClass} onClick={() => submitNumberOperation('insert-key')} type="button">
-                  Insert Key
+                  Insert
                 </button>
                 <button className={secondaryButtonClass} onClick={() => submitNumberOperation('search-key')} type="button">
-                  Search Key
+                  Search
+                </button>
+                <button className={secondaryButtonClass} onClick={() => submitNumberOperation('delete-key')} type="button">
+                  Delete
                 </button>
               </>
             ) : timeline.controlKind === 'prefix-trie' ? (
