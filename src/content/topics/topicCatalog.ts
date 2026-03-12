@@ -75,14 +75,13 @@ const topicCatalog: readonly TopicSummary[] = [
     shortLabel: '05',
     title: 'Trees',
     summary:
-      'Search trees, balancing rotations, multiway trees, and trie-based structures for hierarchical lookup.',
+      'AVL balancing, 2-3 promotion/splitting, left-leaning red-black encoding, and trie-based string indexing.',
     algorithms: [
-      { id: 'binary-search-trees', label: 'Binary Search Trees' },
       { id: 'avl-trees', label: 'AVL Trees' },
-      { id: 'red-black-trees', label: 'Red Black Trees' },
-      { id: '2-3-trees', label: '2 3 Trees' },
-      { id: 'tree-rotations', label: 'Tree Rotations' },
+      { id: '2-3-trees', label: '2-3 Trees' },
+      { id: 'left-leaning-red-black-trees', label: 'Left-Leaning Red-Black Trees' },
       { id: 'prefix-tries', label: 'Prefix Tries' },
+      { id: 'suffix-tries', label: 'Suffix Tries' },
       { id: 'suffix-trees', label: 'Suffix Trees' },
     ],
   }),

@@ -20,6 +20,7 @@ import { Topic02PartitionSelectionLab } from '../components/topic-02/Topic02Part
 import { Topic02StabilityLab } from '../components/topic-02/Topic02StabilityLab.tsx'
 import { Topic03GraphLab } from '../components/topic-03/Topic03GraphLab.tsx'
 import { Topic04DynamicProgrammingLab } from '../components/topic-04/Topic04DynamicProgrammingLab.tsx'
+import { Topic05TreeLab } from '../components/topic-05/Topic05TreeLab.tsx'
 import { Topic06FlowNetworkLab } from '../components/topic-06'
 import { CommandPalette } from '../components/shell/CommandPalette.tsx'
 import { topicCatalog } from '../content/topics/topicCatalog.ts'
@@ -27,6 +28,7 @@ import {
   dynamicProgrammingDirectoryLabelByAlgorithm,
 } from '../algorithms/dp/index.ts'
 import { flowNetworkDirectoryLabelByAlgorithm } from '../algorithms/flow'
+import { treeDirectoryLabelByAlgorithm } from '../algorithms/tree/index.ts'
 import {
   quickselectStrategyOptions,
   quicksortVariantOptions,
@@ -39,6 +41,7 @@ import type {
   PartitionSelectionAlgorithmId,
   QuickselectStrategyId,
   QuicksortVariantId,
+  TreeAlgorithmId,
   Topic02AdvancedSortAlgorithmId,
 } from '../domain/algorithms/types.ts'
 
@@ -86,6 +89,7 @@ const topic03DirectoryLabelByView: Record<Topic03View, string> = {
 }
 
 type Topic04View = DynamicProgrammingAlgorithmId
+type Topic05View = TreeAlgorithmId
 type Topic06View = FlowNetworkAlgorithmId
 
 type ActiveScreen =
@@ -94,6 +98,7 @@ type ActiveScreen =
   | Readonly<{ kind: 'topic-2'; view: Topic02View }>
   | Readonly<{ kind: 'topic-3'; view: Topic03View }>
   | Readonly<{ kind: 'topic-4'; view: Topic04View }>
+  | Readonly<{ kind: 'topic-5'; view: Topic05View }>
   | Readonly<{ kind: 'topic-6'; view: Topic06View }>
 
 const workbenchRouteMap: Readonly<Record<string, ActiveScreen>> = {
@@ -135,6 +140,15 @@ const workbenchRouteMap: Readonly<Record<string, ActiveScreen>> = {
   },
   'topic-4:edit-distance': { kind: 'topic-4', view: 'edit-distance' },
   'topic-4:maximum-subarray': { kind: 'topic-4', view: 'maximum-subarray' },
+  'topic-5:avl-trees': { kind: 'topic-5', view: 'avl-trees' },
+  'topic-5:2-3-trees': { kind: 'topic-5', view: '2-3-trees' },
+  'topic-5:left-leaning-red-black-trees': {
+    kind: 'topic-5',
+    view: 'left-leaning-red-black-trees',
+  },
+  'topic-5:prefix-tries': { kind: 'topic-5', view: 'prefix-tries' },
+  'topic-5:suffix-tries': { kind: 'topic-5', view: 'suffix-tries' },
+  'topic-5:suffix-trees': { kind: 'topic-5', view: 'suffix-trees' },
   'topic-6:flow-networks': { kind: 'topic-6', view: 'flow-networks' },
   'topic-6:residual-graphs': { kind: 'topic-6', view: 'residual-graphs' },
   'topic-6:augmenting-paths': { kind: 'topic-6', view: 'augmenting-paths' },
@@ -175,6 +189,10 @@ const toRouteKeyForScreen = (screen: ActiveScreen) => {
 
   if (screen.kind === 'topic-4') {
     return `topic-4:${screen.view}`
+  }
+
+  if (screen.kind === 'topic-5') {
+    return `topic-5:${screen.view}`
   }
 
   return `topic-6:${screen.view}`
@@ -408,6 +426,7 @@ function IndexPage() {
   const pageMaxWidthClass =
     activeScreen.kind === 'topic-3' ||
     activeScreen.kind === 'topic-4' ||
+    activeScreen.kind === 'topic-5' ||
     activeScreen.kind === 'topic-6'
       ? 'max-w-[1200px]'
       : 'max-w-[980px]'
@@ -498,6 +517,10 @@ function IndexPage() {
       return dynamicProgrammingDirectoryLabelByAlgorithm[activeScreen.view]
     }
 
+    if (activeScreen.kind === 'topic-5') {
+      return treeDirectoryLabelByAlgorithm[activeScreen.view]
+    }
+
     if (activeScreen.kind === 'topic-6') {
       return flowNetworkDirectoryLabelByAlgorithm[activeScreen.view]
     }
@@ -567,6 +590,10 @@ function IndexPage() {
       return dynamicProgrammingDirectoryLabelByAlgorithm[activeScreen.view]
     }
 
+    if (activeScreen.kind === 'topic-5') {
+      return treeDirectoryLabelByAlgorithm[activeScreen.view]
+    }
+
     if (activeScreen.kind === 'topic-6') {
       return flowNetworkDirectoryLabelByAlgorithm[activeScreen.view]
     }
@@ -628,6 +655,8 @@ function IndexPage() {
                   <Topic03GraphLab algorithmId={activeScreen.view} />
                 ) : activeScreen.kind === 'topic-4' ? (
                   <Topic04DynamicProgrammingLab algorithmId={activeScreen.view} />
+                ) : activeScreen.kind === 'topic-5' ? (
+                  <Topic05TreeLab algorithmId={activeScreen.view} />
                 ) : (
                   <Topic06FlowNetworkLab algorithmId={activeScreen.view} />
                 )}

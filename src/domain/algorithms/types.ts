@@ -538,6 +538,14 @@ type GraphEditorState = Readonly<{
   validation: GraphEditorValidation | null
 }>
 
+type TreeAlgorithmId =
+  | 'avl-trees'
+  | '2-3-trees'
+  | 'left-leaning-red-black-trees'
+  | 'prefix-tries'
+  | 'suffix-tries'
+  | 'suffix-trees'
+
 type FlowNetworkAlgorithmId =
   | 'flow-networks'
   | 'residual-graphs'
@@ -752,6 +760,7 @@ export type {
   SortSpaceProfile,
   SortTimeline,
   SortValueItem,
+  TreeAlgorithmId,
   Topic02AdvancedSortAlgorithmId,
   TopicSummary,
   UnionFindModeId,
