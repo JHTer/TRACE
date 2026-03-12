@@ -1261,222 +1261,164 @@ const buildAvlFrames = (operations: readonly TreeWorkbenchOperation[]): readonly
           createFrame(
             frames.length,
             [1, 2],
-          `Trace insertion path for ${operation.value}`,
-          path.path.length === 0
-            ? `The tree is empty, so ${operation.value} will become the root.`
-            : `Follow the ordered search path ${path.path.join(' -> ')} to locate the insertion point for ${operation.value}.`,
-          binaryTreeCanvas(root, {
-            activeKeys: path.path,
-            emptyLabel: 'Insert keys to build a structure.',
-            showBalance: true,
-          }),
-          [
-            { label: 'Nodes', value: `${countNodes(root)}` },
-            { label: 'Height', value: `${heightOf(root)}` },
-            { label: 'Next key', value: `${operation.value}` },
-          ],
-          [`Search path: ${path.path.length === 0 ? '(empty tree)' : path.path.join(' -> ')}`],
-          'Tracing',
-        ),
-      )
+            `Trace insertion path for ${operation.value}`,
+            path.path.length === 0
+              ? `The tree is empty, so ${operation.value} will become the root.`
+              : `Follow the ordered search path ${path.path.join(' -> ')} to locate the insertion point for ${operation.value}.`,
+            binaryTreeCanvas(root, {
+              activeKeys: path.path,
+              emptyLabel: 'Insert keys to build a structure.',
+              showBalance: true,
+            }),
+            [
+              { label: 'Nodes', value: `${countNodes(root)}` },
+              { label: 'Height', value: `${heightOf(root)}` },
+              { label: 'Next key', value: `${operation.value}` },
+            ],
+            [`Search path: ${path.path.length === 0 ? '(empty tree)' : path.path.join(' -> ')}`],
+            'Tracing',
+          ),
+        )
 
-      const plainRoot = plainInsertBinarySearchTree(root, operation.value)
-      const events: string[] = []
-      const inserted = avlInsert(root, operation.value, events)
-      root = inserted.node
-      frames.push(
-        createFrame(
-          frames.length,
-          [3],
-          `Insert ${operation.value} as a BST leaf`,
-          inserted.inserted
-            ? `${operation.value} is first inserted exactly like a BST leaf before any balancing work happens.`
-            : `${operation.value} is already present, so the ordered set does not change.`,
-          binaryTreeCanvas(inserted.inserted ? plainRoot : root, {
-            activeKeys: [operation.value],
-            emptyLabel: 'Insert keys to build a structure.',
-            showBalance: true,
-          }),
-          [
-            { label: 'Nodes', value: `${countNodes(inserted.inserted ? plainRoot : root)}` },
-            { label: 'Height', value: `${heightOf(inserted.inserted ? plainRoot : root)}` },
-            { label: 'Inserted', value: inserted.inserted ? 'yes' : 'duplicate' },
-          ],
-          inserted.inserted ? [`Placed ${operation.value} as the new leaf candidate.`] : [`Skipped duplicate key ${operation.value}.`],
-          inserted.inserted ? 'Leaf inserted' : 'Duplicate',
-        ),
-      )
+        const plainRoot = plainInsertBinarySearchTree(root, operation.value)
+        const events: string[] = []
+        const inserted = avlInsert(root, operation.value, events)
+        root = inserted.node
+        frames.push(
+          createFrame(
+            frames.length,
+            [3],
+            `Insert ${operation.value} as a BST leaf`,
+            inserted.inserted
+              ? `${operation.value} is first inserted exactly like a BST leaf before any balancing work happens.`
+              : `${operation.value} is already present, so the ordered set does not change.`,
+            binaryTreeCanvas(inserted.inserted ? plainRoot : root, {
+              activeKeys: [operation.value],
+              emptyLabel: 'Insert keys to build a structure.',
+              showBalance: true,
+            }),
+            [
+              { label: 'Nodes', value: `${countNodes(inserted.inserted ? plainRoot : root)}` },
+              { label: 'Height', value: `${heightOf(inserted.inserted ? plainRoot : root)}` },
+              { label: 'Inserted', value: inserted.inserted ? 'yes' : 'duplicate' },
+            ],
+            inserted.inserted
+              ? [`Placed ${operation.value} as the new leaf candidate.`]
+              : [`Skipped duplicate key ${operation.value}.`],
+            inserted.inserted ? 'Leaf inserted' : 'Duplicate',
+          ),
+        )
 
-      frames.push(
-        createFrame(
-          frames.length,
-          inserted.inserted && events.length > 0 ? [4, 5, 6] : [4],
-          `Rebalance after inserting ${operation.value}`,
-          inserted.inserted
-            ? events.length === 0
-              ? `No node exceeded balance factor 1 in magnitude, so the tree already satisfies the AVL rule.`
-              : events.join(' ')
-            : `No rebalancing is needed because duplicates do not change the tree.`,
-          binaryTreeCanvas(root, {
-            activeKeys: [operation.value],
-            emptyLabel: 'Insert keys to build a structure.',
-            showBalance: true,
-          }),
-          [
-            { label: 'Nodes', value: `${countNodes(root)}` },
-            { label: 'Height', value: `${heightOf(root)}` },
-            { label: 'Root', value: root === null ? 'none' : `${root.key}` },
-          ],
-          events.length === 0 ? ['AVL invariant restored without any Ian-method rebuild.'] : events,
-          'Balanced',
-        ),
-      )
-      return
-    }
-
-    if (operation.kind === 'delete-key') {
-      const path = getSearchPath(root, operation.value)
-      frames.push(
-        createFrame(
-          frames.length,
-          [7, 8],
-          `Trace deletion path for ${operation.value}`,
-          path.found
-            ? `Follow the search path ${path.path.join(' -> ')} to locate ${operation.value} for removal.`
-            : `${operation.value} is absent; deletion stops after following ${path.path.join(' -> ')}.`,
-          binaryTreeCanvas(root, {
-            activeKeys: path.path,
-            emptyLabel: 'Insert keys to build a structure.',
-            showBalance: true,
-          }),
-          [
-            { label: 'Nodes', value: `${countNodes(root)}` },
-            { label: 'Height', value: `${heightOf(root)}` },
-            { label: 'Delete', value: `${operation.value}` },
-          ],
-          [`Visited path: ${path.path.length === 0 ? '(empty tree)' : path.path.join(' -> ')}`],
-          path.found ? 'Tracing' : 'Missing',
-        ),
-      )
-
-      if (!path.found) {
+        frames.push(
+          createFrame(
+            frames.length,
+            inserted.inserted && events.length > 0 ? [4, 5, 6] : [4],
+            `Rebalance after inserting ${operation.value}`,
+            inserted.inserted
+              ? events.length === 0
+                ? `No node exceeded balance factor 1 in magnitude, so the tree already satisfies the AVL rule.`
+                : events.join(' ')
+              : `No rebalancing is needed because duplicates do not change the tree.`,
+            binaryTreeCanvas(root, {
+              activeKeys: [operation.value],
+              emptyLabel: 'Insert keys to build a structure.',
+              showBalance: true,
+            }),
+            [
+              { label: 'Nodes', value: `${countNodes(root)}` },
+              { label: 'Height', value: `${heightOf(root)}` },
+              { label: 'Root', value: root?.key == null ? 'none' : `${root.key}` },
+            ],
+            events.length === 0 ? ['AVL invariant restored without any Ian-method rebuild.'] : events,
+            'Balanced',
+          ),
+        )
         return
       }
+      case 'delete-key': {
+        const path = getSearchPath(root, operation.value)
+        frames.push(
+          createFrame(
+            frames.length,
+            [7, 8],
+            `Trace deletion path for ${operation.value}`,
+            path.found
+              ? `Follow the search path ${path.path.join(' -> ')} to locate ${operation.value} for removal.`
+              : `${operation.value} is absent; deletion stops after following ${path.path.join(' -> ')}.`,
+            binaryTreeCanvas(root, {
+              activeKeys: path.path,
+              emptyLabel: 'Insert keys to build a structure.',
+              showBalance: true,
+            }),
+            [
+              { label: 'Nodes', value: `${countNodes(root)}` },
+              { label: 'Height', value: `${heightOf(root)}` },
+              { label: 'Delete', value: `${operation.value}` },
+            ],
+            [`Visited path: ${path.path.length === 0 ? '(empty tree)' : path.path.join(' -> ')}`],
+            path.found ? 'Tracing' : 'Missing',
+          ),
+        )
 
-      const keys = inorderKeys(root)
-      const nextKeys = keys.filter((key) => key !== operation.value)
-      root = rebuildAvlFromKeys(nextKeys)
+        if (!path.found) {
+          return
+        }
 
-      frames.push(
-        createFrame(
-          frames.length,
-          [8, 9],
-          `Delete ${operation.value} and rebalance`,
-          `Removed ${operation.value} then rebuilt the AVL by reinserting remaining keys to restore balance.`,
-          binaryTreeCanvas(root, {
-            activeKeys: [],
-            emptyLabel: 'Insert keys to build a structure.',
-            showBalance: true,
-          }),
-          [
-            { label: 'Nodes', value: `${countNodes(root)}` },
-            { label: 'Height', value: `${heightOf(root)}` },
-            { label: 'Root', value: root === null ? 'none' : `${root.key}` },
-          ],
-          [
-            `Deleted ${operation.value}.`,
-            `Remaining keys (${nextKeys.length}): ${nextKeys.join(', ') || 'empty set'}.`,
-          ],
-          'Balanced',
-        ),
-      )
-      return
-    }
+        const keys = inorderKeys(root)
+        const nextKeys = keys.filter((key) => key !== operation.value)
+        root = rebuildAvlFromKeys(nextKeys)
 
-    if (operation.kind === 'delete-key') {
-      const deleteValue = (operation as Extract<TreeWorkbenchOperation, { kind: 'delete-key' }>).value
-      const path = getSearchPath(root, deleteValue)
-      frames.push(
-        createFrame(
-          frames.length,
-          [7, 8],
-          `Trace deletion path for ${deleteValue}`,
-          path.found
-            ? `Follow the BST path ${path.path.join(' -> ')} before applying red-black fix-ups for deletion.`
-            : `${deleteValue} is not present after following ${path.path.join(' -> ')}.`,
-          binaryTreeCanvas(root, {
-            activeKeys: path.path,
-            emptyLabel: 'Insert keys to build a structure.',
-            showColor: true,
-          }),
-          [
-            { label: 'Nodes', value: `${countNodes(root)}` },
-            { label: 'Root', value: root === null ? 'none' : `${root.key}` },
-            { label: 'Delete', value: `${deleteValue}` },
-          ],
-          [`Visited path: ${path.path.length === 0 ? '(empty tree)' : path.path.join(' -> ')}`],
-          path.found ? 'Tracing' : 'Missing',
-        ),
-      )
-
-      if (!path.found) {
+        frames.push(
+          createFrame(
+            frames.length,
+            [8, 9],
+            `Delete ${operation.value} and rebalance`,
+            `Removed ${operation.value} then rebuilt the AVL by reinserting remaining keys to restore balance.`,
+            binaryTreeCanvas(root, {
+              activeKeys: [],
+              emptyLabel: 'Insert keys to build a structure.',
+              showBalance: true,
+            }),
+            [
+              { label: 'Nodes', value: `${countNodes(root)}` },
+              { label: 'Height', value: `${heightOf(root)}` },
+              { label: 'Root', value: root?.key == null ? 'none' : `${root.key}` },
+            ],
+            [
+              `Deleted ${operation.value}.`,
+              `Remaining keys (${nextKeys.length}): ${nextKeys.join(', ') || 'empty set'}.`,
+            ],
+            'Balanced',
+          ),
+        )
         return
       }
-
-      const keys = inorderKeys(root)
-      const nextKeys = keys.filter((key) => key !== deleteValue)
-      root = rebuildLlrbFromKeys(nextKeys)
-
-      frames.push(
-        createFrame(
-          frames.length,
-          [8, 9],
-          `Delete ${deleteValue} and restore red-black invariants`,
-          `Removed ${deleteValue} and rebuilt the left-leaning red-black tree from remaining keys; root repainted black.`,
-          binaryTreeCanvas(root, {
-            activeKeys: [],
-            emptyLabel: 'Insert keys to build a structure.',
-            showColor: true,
-          }),
-          [
-            { label: 'Nodes', value: `${countNodes(root)}` },
-            { label: 'Root', value: root === null ? 'none' : `${root.key}` },
-            { label: 'Red links', value: `${countRedLinks(root)}` },
-          ],
-          [
-            `Deleted ${deleteValue}.`,
-            `Remaining keys (${nextKeys.length}): ${nextKeys.join(', ') || 'empty set'}.`,
-          ],
-          'Balanced',
-        ),
-      )
-      return
-    }
-
-    if (operation.kind === 'search-key') {
-      const path = getSearchPath(root, operation.value)
-      frames.push(
-        createFrame(
-          frames.length,
-          [1, 2],
-          `Search for ${operation.value}`,
-          path.found
-            ? `Search follows ${path.path.join(' -> ')} and finds ${operation.value}.`
-            : `Search follows ${path.path.join(' -> ')} and stops at a null child, so ${operation.value} is absent.`,
-          binaryTreeCanvas(root, {
-            activeKeys: path.path,
-            emptyLabel: 'Insert keys to build a structure.',
-            showBalance: true,
-          }),
-          [
-            { label: 'Nodes', value: `${countNodes(root)}` },
-            { label: 'Height', value: `${heightOf(root)}` },
-            { label: 'Found', value: path.found ? 'yes' : 'no' },
-          ],
-          [`Visited path: ${path.path.length === 0 ? '(empty tree)' : path.path.join(' -> ')}`],
-          path.found ? 'Found' : 'Missing',
-        ),
-      )
+      case 'search-key': {
+        const path = getSearchPath(root, operation.value)
+        frames.push(
+          createFrame(
+            frames.length,
+            [1, 2],
+            `Search for ${operation.value}`,
+            path.found
+              ? `Search follows ${path.path.join(' -> ')} and finds ${operation.value}.`
+              : `Search follows ${path.path.join(' -> ')} and stops at a null child, so ${operation.value} is absent.`,
+            binaryTreeCanvas(root, {
+              activeKeys: path.path,
+              emptyLabel: 'Insert keys to build a structure.',
+              showBalance: true,
+            }),
+            [
+              { label: 'Nodes', value: `${countNodes(root)}` },
+              { label: 'Height', value: `${heightOf(root)}` },
+              { label: 'Found', value: path.found ? 'yes' : 'no' },
+            ],
+            [`Visited path: ${path.path.length === 0 ? '(empty tree)' : path.path.join(' -> ')}`],
+            path.found ? 'Found' : 'Missing',
+          ),
+        )
+        return
+      }
     }
   })
 
