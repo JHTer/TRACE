@@ -1,11 +1,21 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import {
+  createElementarySortTimeline,
+  createLineEvents as createElementaryLineEvents,
+  elementarySortPresets,
+  getFrameByLineEvent,
+} from '../../algorithms/array/elementarySortTimeline.ts'
+import type {
+  ElementarySortAlgorithmId,
+  LineEvent,
+  SortFrame,
+  SortTimeline,
+} from '../../domain/algorithms/types.ts'
 
 type Topic01View =
   | 'complexity-analysis'
   | 'correctness-invariants'
-  | 'physical-machine-metaphor'
-
-type DiagnosticAlgorithm = 'merge-sort' | 'binary-search' | 'dp-table'
+type ProofAlgorithm = 'binary-search' | ElementarySortAlgorithmId
 
 type ComplexityCurve = Readonly<{
   id: string
@@ -34,17 +44,6 @@ type PseudocodeLine = Readonly<{
   text: string
 }>
 
-type DiagnosticProfile = Readonly<{
-  cpuRate: number
-  stackPercent: number
-  auxiliaryPercent: number
-  totalMemoryMb: number
-  peakAuxKb: number
-  complexity: string
-  stackDepth: number
-  logs: readonly string[]
-}>
-
 const topic01Views: readonly Readonly<{
   id: Topic01View
   label: string
@@ -58,12 +57,7 @@ const topic01Views: readonly Readonly<{
   {
     id: 'correctness-invariants',
     label: 'Correctness and Invariants',
-    summary: 'A binary-search proof sketch rendered as state, transition, and invariant checks.',
-  },
-  {
-    id: 'physical-machine-metaphor',
-    label: 'Physical Machine Metaphor',
-    summary: 'CPU, stack, and auxiliary-memory diagnostics translated into a machine-like panel.',
+    summary: 'Binary search plus bubble, selection, and insertion correctness walkthroughs with stepwise invariants.',
   },
 ] as const
 
@@ -118,15 +112,15 @@ const binarySearchTarget = 128
 
 const binarySearchPseudocodeLines: readonly PseudocodeLine[] = [
   { lineNumber: 1, text: 'L <- 1' },
-  { lineNumber: 2, text: 'R <- n              ' },
+  { lineNumber: 2, text: 'R <- n' },
   { lineNumber: 3, text: 'while L <= R:' },
-  { lineNumber: 4, text: '  mid <- L + floor((R - L) / 2)' },
-  { lineNumber: 5, text: '  if A[mid] == target:' },
-  { lineNumber: 6, text: '    return mid        ' },
-  { lineNumber: 7, text: '  if A[mid] < target:' },
-  { lineNumber: 8, text: '    L <- mid + 1   ' },
-  { lineNumber: 9, text: '  else:' },
-  { lineNumber: 10, text: '    R <- mid - 1 ' },
+  { lineNumber: 4, text: '    mid <- L + floor((R - L) / 2)' },
+  { lineNumber: 5, text: '    if A[mid] == target:' },
+  { lineNumber: 6, text: '        return mid' },
+  { lineNumber: 7, text: '    if A[mid] < target:' },
+  { lineNumber: 8, text: '        L <- mid + 1' },
+  { lineNumber: 9, text: '    else:' },
+  { lineNumber: 10, text: '        R <- mid - 1' },
   { lineNumber: 11, text: 'return NOT_FOUND' },
 ] as const
 
@@ -228,21 +222,7 @@ const buildBinarySearchTrace = (
 
 const correctnessSteps = buildBinarySearchTrace(binarySearchArray, binarySearchTarget)
 
-const diagnosticAlgorithmLabels: Record<DiagnosticAlgorithm, string> = {
-  'merge-sort': 'Merge Sort',
-  'binary-search': 'Binary Search',
-  'dp-table': 'DP Table Fill',
-}
-
-const clampPercent = (value: number) => Math.max(0, Math.min(100, value))
-
 const formatInteger = (value: number) => new Intl.NumberFormat('en-US').format(Math.round(value))
-
-const formatFloat = (value: number, digits = 2) =>
-  new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(value)
 
 const createSampleSizes = (maxN: number) =>
   Array.from({ length: 24 }, (_, index) => Math.max(1, Math.round(1 + (index / 23) * (maxN - 1))))
@@ -261,72 +241,6 @@ const createPolylinePoints = (
       return `${x},${y}`
     })
     .join(' ')
-
-const getDiagnosticProfile = (
-  algorithm: DiagnosticAlgorithm,
-  n: number,
-): DiagnosticProfile => {
-  if (algorithm === 'binary-search') {
-    const depth = Math.max(1, Math.ceil(Math.log2(n)))
-
-    return {
-      cpuRate: 4200 + depth * 180,
-      stackPercent: clampPercent(depth * 4),
-      auxiliaryPercent: 8,
-      totalMemoryMb: 0.22 + depth * 0.02,
-      peakAuxKb: 24,
-      complexity: 'O(log n)',
-      stackDepth: depth,
-      logs: [
-        '[trace] Range narrowed after midpoint comparison.',
-        '[trace] No auxiliary buffer allocated.',
-        '[trace] Loop invariant preserved for next iteration.',
-      ],
-    }
-  }
-
-  if (algorithm === 'dp-table') {
-    const gridSize = Math.max(4, Math.round(Math.sqrt(n)))
-
-    return {
-      cpuRate: 16000 + n * 62,
-      stackPercent: 14,
-      auxiliaryPercent: clampPercent(24 + gridSize * 4),
-      totalMemoryMb: 0.9 + n / 180,
-      peakAuxKb: 160 + gridSize * 22,
-      complexity: 'O(n^2)',
-      stackDepth: 2,
-      logs: [
-        '[trace] Table cell updated from top and left dependencies.',
-        '[trace] Iterative fill keeps call-stack pressure low.',
-        '[trace] Auxiliary memory grows with the table footprint.',
-      ],
-    }
-  }
-
-  const depth = Math.max(1, Math.ceil(Math.log2(n)))
-
-  return {
-    cpuRate: 12000 + n * 38,
-    stackPercent: clampPercent(20 + depth * 5),
-    auxiliaryPercent: clampPercent(24 + n / 4),
-    totalMemoryMb: 0.55 + n / 128,
-    peakAuxKb: 180 + n * 3.25,
-    complexity: 'O(n log n)',
-    stackDepth: depth,
-    logs: [
-      '[trace] Divide step pushed a new recursive frame.',
-      '[trace] Temporary merge buffer allocated for the active subarray.',
-      '[trace] CPU work rises during merge comparisons and writes.',
-    ],
-  }
-}
-
-const createRecursionBars = (depth: number) =>
-  Array.from({ length: 12 }, (_, index) => {
-    const distance = Math.abs(index - Math.min(depth, 11))
-    return clampPercent(96 - distance * 11)
-  })
 
 function SectionFrame({
   children,
@@ -474,8 +388,12 @@ function ComplexityAnalysisView() {
   )
 }
 
-function CorrectnessAndInvariantsView() {
-  const lineEvents = useMemo(
+function CorrectnessAndInvariantsView({
+  proofAlgorithm,
+}: Readonly<{
+  proofAlgorithm: ProofAlgorithm
+}>) {
+  const binaryLineEvents = useMemo(
     () =>
       correctnessSteps.flatMap((correctnessStep, index) =>
         correctnessStep.executedLines.map((lineNumber) => ({
@@ -486,19 +404,70 @@ function CorrectnessAndInvariantsView() {
     [],
   )
   const [lineEventIndex, setLineEventIndex] = useState(0)
+
+  const sortDataset = useMemo(
+    () => elementarySortPresets.find((preset) => preset.id === 'with-duplicates') ?? elementarySortPresets[0],
+    [],
+  )
+
+  const sortTimeline = useMemo<SortTimeline | null>(() => {
+    if (proofAlgorithm === 'binary-search') {
+      return null
+    }
+    return createElementarySortTimeline(proofAlgorithm, sortDataset.values)
+  }, [proofAlgorithm, sortDataset])
+
+  const sortLineEvents = useMemo<readonly LineEvent[]>(() => {
+    if (sortTimeline === null) {
+      return []
+    }
+    return createElementaryLineEvents(sortTimeline.frames)
+  }, [sortTimeline])
+
+  const isBinary = proofAlgorithm === 'binary-search'
+  const lineEvents = isBinary ? binaryLineEvents : sortLineEvents
   const activeEvent = lineEvents[lineEventIndex] ?? lineEvents[0]
-  const step = correctnessSteps[activeEvent?.stepIndex ?? 0] ?? correctnessSteps[0]
-  const target = binarySearchTarget
-  const arrayGridStyle = {
-    gridTemplateColumns: `repeat(${binarySearchArray.length}, minmax(0, 1fr))`,
-  }
-  const isDenseArray = binarySearchArray.length >= 14
-  const phaseLabel = `${step.phase[0].toUpperCase()}${step.phase.slice(1)}`
   const activeTraceLine =
     activeEvent?.lineNumber ??
-    binarySearchPseudocodeLines[0]?.lineNumber ??
+    (isBinary
+      ? binarySearchPseudocodeLines[0]?.lineNumber
+      : sortTimeline?.pseudocodeLines[0]?.lineNumber) ??
     1
   const lastLineEventIndex = Math.max(0, lineEvents.length - 1)
+
+  const activeBinaryStep = isBinary
+    ? correctnessSteps[(activeEvent as { stepIndex?: number })?.stepIndex ?? 0] ?? correctnessSteps[0]
+    : null
+
+  const activeSortFrame: SortFrame | null =
+    !isBinary && sortTimeline !== null
+      ? getFrameByLineEvent(sortTimeline, sortLineEvents, lineEventIndex)
+      : null
+
+  const pseudocodeLines = isBinary
+    ? binarySearchPseudocodeLines
+    : sortTimeline?.pseudocodeLines ?? []
+
+  const pointerLabelsByIndex = useMemo(() => {
+    if (activeSortFrame === null) {
+      return new Map<number, string[]>()
+    }
+    const labels = new Map<number, string[]>()
+    Object.entries(activeSortFrame.pointers).forEach(([label, index]) => {
+      if (typeof index !== 'number') {
+        return
+      }
+      const trimmedLabel = label.replace(/Index$/, '')
+      const list = labels.get(index) ?? []
+      list.push(trimmedLabel)
+      labels.set(index, list)
+    })
+    return labels
+  }, [activeSortFrame])
+
+  useEffect(() => {
+    setLineEventIndex(0)
+  }, [proofAlgorithm])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -531,11 +500,50 @@ function CorrectnessAndInvariantsView() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [lastLineEventIndex])
 
+  const binaryArrayGridStyle = {
+    gridTemplateColumns: `repeat(${binarySearchArray.length}, minmax(0, 1fr))`,
+  }
+  const isBinaryDense = binarySearchArray.length >= 14
+
+  const sortArrayGridStyle =
+    activeSortFrame !== null
+      ? { gridTemplateColumns: `repeat(${activeSortFrame.items.length}, minmax(0, 1fr))` }
+      : {}
+
+  const checklistItems: readonly string[] = useMemo(() => {
+    if (proofAlgorithm === 'bubble-sort') {
+      return [
+        'Initialization: unsorted array; sorted suffix is empty.',
+        'Maintenance: each inner pass bubbles the max to the end, growing the sorted suffix.',
+        'Termination: no swap in a pass ⇒ array already sorted; otherwise after n-1 passes suffix covers all.',
+      ]
+    }
+    if (proofAlgorithm === 'selection-sort') {
+      return [
+        'Initialization: sorted prefix is empty.',
+        'Maintenance: select smallest in the remaining unsorted region, swap into position i.',
+        'Termination: after n-1 selections the entire array is sorted; prefix spans all indices.',
+      ]
+    }
+    if (proofAlgorithm === 'insertion-sort') {
+      return [
+        'Initialization: prefix of length 1 is trivially sorted.',
+        'Maintenance: shift larger elements right until the key fits; sorted prefix length increases by 1.',
+        'Termination: after inserting last key, full array is sorted and stability preserved.',
+      ]
+    }
+    return [
+      'Initialization: closed interval starts at [1, n] for array length n.',
+      'Maintenance: each jump removes at least one element and keeps target in range.',
+      'Termination: when A[mid] == target, return position; when L > R, return NOT_FOUND.',
+    ]
+  }, [proofAlgorithm])
+
   return (
     <div className="space-y-6">
       <SectionFrame>
         <div className="space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <h4 className="text-[1.35rem] font-medium tracking-[-0.03em] text-[#111111]">
               Step Execution and Correctness
             </h4>
@@ -545,10 +553,14 @@ function CorrectnessAndInvariantsView() {
           </div>
 
           <div className="grid gap-6 xl:grid-cols-2">
-            <div className="border border-[#E5E5E5] bg-white p-4">
-              <div className="font-mono text-[0.92rem] text-[#666666]">Binary Search Pseudocode</div>
-              <div className="mt-3 border border-[#E5E5E5] bg-[#FAFAFA] p-2 font-mono text-[0.86rem] leading-6">
-                {binarySearchPseudocodeLines.map((line) => {
+            <div className="flex h-full flex-col">
+              <div className="font-mono text-[0.92rem] text-[#666666]">
+                {proofAlgorithm === 'binary-search'
+                  ? 'Binary Search Pseudocode'
+                  : `${(sortTimeline?.title ?? '').toUpperCase()} Pseudocode`}
+              </div>
+              <div className="mt-3 flex-1 border border-[#E5E5E5] bg-[#FAFAFA] p-2 font-mono text-[0.86rem] leading-6">
+                {pseudocodeLines.map((line) => {
                   const isCurrent = line.lineNumber === activeTraceLine
 
                   return (
@@ -560,274 +572,193 @@ function CorrectnessAndInvariantsView() {
                       ].join(' ')}
                     >
                       <span className="w-[2ch] text-right text-[#666666]">{line.lineNumber}</span>
-                      <span>{line.text}</span>
+                      <span className="whitespace-pre">{line.text}</span>
                     </div>
                   )
                 })}
               </div>
             </div>
-            <div className="border border-[#E5E5E5] bg-[#FAFAFA] p-4">
+            <div className="flex h-full flex-col">
               <div className="font-mono text-[0.92rem] text-[#666666]">
                 Proof Checklist
               </div>
-              <div className="mt-3 space-y-2 font-mono text-[0.9rem] leading-6 text-[#111111]">
-                <div>[1] Initialization: closed interval starts at [1, n] for array length n.</div>
-                <div>[2] Maintenance: each jump removes at least one element and keeps target in range.</div>
-                <div>[3] Termination: when A[mid] == target, return position; when L &gt; R, return NOT_FOUND.</div>
+              <div className="mt-3 flex-1 border border-[#E5E5E5] bg-[#FAFAFA] p-4 font-mono text-[0.9rem] leading-6 text-[#111111] space-y-2">
+                {checklistItems.map((item, index) => (
+                  <div key={item}>[{index + 1}] {item}</div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {isBinary && activeBinaryStep !== null ? (
+            <div className="space-y-4">
+              <div className="space-y-2 border border-[#E5E5E5] bg-[#FAFAFA] p-4 font-mono text-[0.95rem] text-[#111111]">
+                <div>step: {activeBinaryStep.stepNumber} / {correctnessSteps.length}</div>
+                <div>phase: {`${activeBinaryStep.phase[0].toUpperCase()}${activeBinaryStep.phase.slice(1)}`}</div>
+                <div>target: {binarySearchTarget}</div>
+                <div>L: {toDisplayIndex(activeBinaryStep.left)}</div>
+                <div>mid: {toDisplayIndex(activeBinaryStep.mid)}</div>
+                <div>R: {toDisplayIndex(activeBinaryStep.right)}</div>
                 <div>
-                  Bounds note: for [L, R], use R=n and updates mid+1 / mid-1. For [L, R), use R=n+1
-                  and update R=mid instead of mid-1.
+                  A[mid]: A[{toDisplayIndex(activeBinaryStep.mid)}] = {binarySearchArray[activeBinaryStep.mid]}
                 </div>
+                <div className="pt-1 text-[0.86rem] text-[#666666]">{activeBinaryStep.jump}</div>
               </div>
-            </div>
-          </div>
 
-          <div className="space-y-4">
-            <div className="space-y-2 border border-[#E5E5E5] bg-[#FAFAFA] p-4 font-mono text-[0.95rem] text-[#111111]">
-              <div>step: {step.stepNumber} / {correctnessSteps.length}</div>
-              <div>phase: {phaseLabel}</div>
-              <div>target: {target}</div>
-              <div>L: {toDisplayIndex(step.left)}</div>
-              <div>mid: {toDisplayIndex(step.mid)}</div>
-              <div>R: {toDisplayIndex(step.right)}</div>
-              <div>
-                A[mid]: A[{toDisplayIndex(step.mid)}] = {binarySearchArray[step.mid]}
-              </div>
-              <div className="pt-1 text-[0.86rem] text-[#666666]">{step.jump}</div>
-            </div>
-
-            <div className="overflow-hidden border border-[#E5E5E5] bg-white p-3 sm:p-4">
-              <div className="mb-2 font-mono text-[0.85rem] text-[#666666]">
-                Sorted List
-              </div>
-              <div className="relative">
-                <div className="mb-1 font-mono text-[0.78rem] tracking-[0.04em] text-[#666666]">
-                  Pointer (L / mid / R)
+              <div className="overflow-hidden border border-[#E5E5E5] bg-white p-3 sm:p-4">
+                <div className="mb-2 font-mono text-[0.85rem] text-[#666666]">
+                  Sorted List
                 </div>
-                <div
-                  className={[
-                    'mb-3 grid font-mono text-[#111111]',
-                    isDenseArray ? 'gap-[2px] text-[0.66rem]' : 'gap-2 text-[0.86rem]',
-                  ].join(' ')}
-                  style={arrayGridStyle}
-                >
-                  {binarySearchArray.map((value, index) => (
-                    <div key={`marker-${value}-${index}`} className="text-center">
-                      {[
-                        index === step.left ? 'L' : '',
-                        index === step.mid ? 'M' : '',
-                        index === step.right ? 'R' : '',
-                      ]
-                        .filter((label) => label.length > 0)
-                        .join('/')}
-                    </div>
-                  ))}
-                </div>
-                <div className="mb-1 font-mono text-[0.78rem] tracking-[0.04em] text-[#666666]">
-                  Index
-                </div>
-                <div
-                  className={[
-                    'mb-3 grid font-mono text-[#666666]',
-                    isDenseArray ? 'gap-[2px] text-[0.68rem]' : 'gap-2 text-[0.8rem]',
-                  ].join(' ')}
-                  style={arrayGridStyle}
-                >
-                  {binarySearchArray.map((_, index) => (
-                    <div key={`index-${index}`} className="text-center">
-                      {toDisplayIndex(index)}
-                    </div>
-                  ))}
-                </div>
-                <div className="mb-1 font-mono text-[0.78rem] tracking-[0.04em] text-[#666666]">
-                  Value
-                </div>
-                <div className={isDenseArray ? 'grid gap-[2px]' : 'grid gap-2'} style={arrayGridStyle}>
-                  {binarySearchArray.map((value, index) => {
-                    const isOutsideRange = index < step.left || index > step.right
-                    const isMid = index === step.mid
-
-                    return (
-                      <div
-                        key={`${value}-${index}`}
-                        className={[
-                          'flex items-center justify-center border font-mono transition-colors',
-                          isDenseArray ? 'h-10 text-[0.72rem]' : 'h-14 text-[1rem]',
-                          isMid
-                            ? 'border-[#111111] bg-[#111111] text-[#FAFAFA]'
-                            : isOutsideRange
-                              ? 'border-[#E5E5E5] bg-[#F4F4F4] text-[#999999]'
-                              : 'border-[#111111] bg-white text-[#111111]',
-                        ].join(' ')}
-                      >
-                        {value}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </SectionFrame>
-    </div>
-  )
-}
-
-function PhysicalMachineMetaphorView() {
-  const [algorithm, setAlgorithm] = useState<DiagnosticAlgorithm>('merge-sort')
-  const [inputSize, setInputSize] = useState(128)
-
-  const profile = useMemo(
-    () => getDiagnosticProfile(algorithm, inputSize),
-    [algorithm, inputSize],
-  )
-
-  const recursionBars = useMemo(
-    () => createRecursionBars(profile.stackDepth),
-    [profile.stackDepth],
-  )
-
-  return (
-    <div className="space-y-6">
-      <SectionFrame>
-        <div className="space-y-6">
-          <div className="flex flex-wrap items-center gap-2">
-            {Object.entries(diagnosticAlgorithmLabels).map(([id, label]) => {
-              const isActive = id === algorithm
-
-              return (
-                <button
-                  key={id}
-                  className={[
-                    'border px-3 py-1.5 font-mono text-[0.88rem] transition-colors',
-                    isActive
-                      ? 'border-[#111111] bg-[#111111] text-[#FAFAFA]'
-                      : 'border-[#E5E5E5] bg-white text-[#111111]',
-                  ].join(' ')}
-                  onClick={() => setAlgorithm(id as DiagnosticAlgorithm)}
-                  type="button"
-                >
-                  {label}
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="flex items-center gap-4">
-            <span className="min-w-[6ch] rounded border border-[#E5E5E5] bg-[#FAFAFA] px-2 py-1 font-mono text-[0.9rem] text-[#111111]">
-              n = {inputSize}
-            </span>
-            <input
-              aria-label="Diagnostic input size"
-              className="w-full accent-[#111111]"
-              max={256}
-              min={16}
-              onChange={(event) => setInputSize(Number(event.target.value))}
-              type="range"
-              value={inputSize}
-            />
-          </div>
-
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="space-y-6">
-              <div className="border border-[#E5E5E5] bg-white p-4">
-                <div className="font-mono text-[0.92rem] text-[#666666]">CPU Work Meter</div>
-                <div className="mt-3 h-8 overflow-hidden border border-[#111111] bg-[#FAFAFA]">
+                <div className="relative">
+                  <div className="mb-1 font-mono text-[0.78rem] tracking-[0.04em] text-[#666666]">
+                    Pointer (L / mid / R)
+                  </div>
                   <div
-                    className="h-full bg-[#111111]"
-                    style={{ width: `${clampPercent(profile.cpuRate / 220)}%` }}
-                  />
+                    className={[
+                      'mb-3 grid font-mono text-[#111111]',
+                      isBinaryDense ? 'gap-[2px] text-[0.66rem]' : 'gap-2 text-[0.86rem]',
+                    ].join(' ')}
+                    style={binaryArrayGridStyle}
+                  >
+                    {binarySearchArray.map((value, index) => (
+                      <div key={`marker-${value}-${index}`} className="text-center">
+                        {[
+                          index === activeBinaryStep.left ? 'L' : '',
+                          index === activeBinaryStep.mid ? 'M' : '',
+                          index === activeBinaryStep.right ? 'R' : '',
+                        ]
+                          .filter((label) => label.length > 0)
+                          .join('/')}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mb-1 font-mono text-[0.78rem] tracking-[0.04em] text-[#666666]">
+                    Index
+                  </div>
+                  <div
+                    className={[
+                      'mb-3 grid font-mono text-[#666666]',
+                      isBinaryDense ? 'gap-[2px] text-[0.68rem]' : 'gap-2 text-[0.8rem]',
+                    ].join(' ')}
+                    style={binaryArrayGridStyle}
+                  >
+                    {binarySearchArray.map((_, index) => (
+                      <div key={`index-${index}`} className="text-center">
+                        {toDisplayIndex(index)}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mb-1 font-mono text-[0.78rem] tracking-[0.04em] text-[#666666]">
+                    Value
+                  </div>
+                  <div className={isBinaryDense ? 'grid gap-[2px]' : 'grid gap-2'} style={binaryArrayGridStyle}>
+                    {binarySearchArray.map((value, index) => {
+                      const isOutsideRange = index < activeBinaryStep.left || index > activeBinaryStep.right
+                      const isMid = index === activeBinaryStep.mid
+
+                      return (
+                        <div
+                          key={`${value}-${index}`}
+                          className={[
+                            'flex items-center justify-center border font-mono transition-colors',
+                            isBinaryDense ? 'h-10 text-[0.72rem]' : 'h-14 text-[1rem]',
+                            isMid
+                              ? 'border-[#111111] bg-[#111111] text-[#FAFAFA]'
+                              : isOutsideRange
+                                ? 'border-[#E5E5E5] bg-[#F4F4F4] text-[#999999]'
+                                : 'border-[#111111] bg-white text-[#111111]',
+                          ].join(' ')}
+                        >
+                          {value}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
-                <div className="mt-3 font-mono text-[1rem] text-[#111111]">
-                  CPU Activity: {formatInteger(profile.cpuRate)} ops/sec
+              </div>
+            </div>
+          ) : null}
+
+          {!isBinary && activeSortFrame !== null ? (
+            <div className="space-y-4">
+              <div className="space-y-2 border border-[#E5E5E5] bg-[#FAFAFA] p-4 font-mono text-[0.95rem] text-[#111111]">
+                <div>frame: {lineEventIndex + 1} / {lineEvents.length}</div>
+                <div>operation: {activeSortFrame.operationText}</div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>comparisons: {activeSortFrame.counters.comparisons}</div>
+                  <div>writes: {activeSortFrame.counters.writes}</div>
+                  <div>swaps: {activeSortFrame.counters.swaps}</div>
+                  <div>passes: {activeSortFrame.counters.passes}</div>
                 </div>
               </div>
 
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div className="border border-[#E5E5E5] bg-[#FAFAFA] p-4">
-                  <div className="font-mono text-[0.92rem] text-[#666666]">Stack Memory</div>
-                  <div className="mt-3 h-8 overflow-hidden border border-[#111111] bg-white">
-                    <div
-                      className="h-full bg-[#111111]"
-                      style={{ width: `${profile.stackPercent}%` }}
-                    />
-                  </div>
-                  <div className="mt-3 font-mono text-[0.95rem] text-[#111111]">
-                    Usage: {formatInteger(profile.stackPercent)}%
-                  </div>
+              <div className="overflow-hidden border border-[#E5E5E5] bg-white p-3 sm:p-4">
+                <div className="mb-2 font-mono text-[0.85rem] text-[#666666]">
+                  Array View
                 </div>
+                <div className="relative">
+                  <div className="mb-1 font-mono text-[0.78rem] tracking-[0.04em] text-[#666666]">
+                    Pointer(s)
+                  </div>
+                  <div
+                    className="mb-3 grid font-mono text-[#111111] gap-[2px] text-[0.7rem]"
+                    style={sortArrayGridStyle}
+                  >
+                    {activeSortFrame.items.map((item, index) => (
+                      <div key={`ptr-${item.id}`} className="text-center">
+                        {(pointerLabelsByIndex.get(index) ?? []).join('/')}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mb-1 font-mono text-[0.78rem] tracking-[0.04em] text-[#666666]">
+                    Index
+                  </div>
+                  <div
+                    className="mb-3 grid font-mono text-[#666666] gap-[2px] text-[0.78rem]"
+                    style={sortArrayGridStyle}
+                  >
+                    {activeSortFrame.items.map((_, index) => (
+                      <div key={`s-index-${index}`} className="text-center">
+                        {index + 1}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mb-1 font-mono text-[0.78rem] tracking-[0.04em] text-[#666666]">
+                    Value
+                  </div>
+                  <div
+                    className="grid gap-[2px]"
+                    style={sortArrayGridStyle}
+                  >
+                    {activeSortFrame.items.map((item, index) => {
+                      const isActive = activeSortFrame.activeIndices.includes(index)
+                      const sortedRegion = activeSortFrame.sortedRegion
+                      const isSorted =
+                        sortedRegion !== null &&
+                        index >= sortedRegion.start &&
+                        index <= sortedRegion.end
 
-                <div className="border border-[#E5E5E5] bg-[#FAFAFA] p-4">
-                  <div className="font-mono text-[0.92rem] text-[#666666]">Auxiliary Memory</div>
-                  <div className="mt-3 h-8 overflow-hidden border border-[#111111] bg-white">
-                    <div
-                      className="h-full bg-[#111111]"
-                      style={{ width: `${profile.auxiliaryPercent}%` }}
-                    />
-                  </div>
-                  <div className="mt-3 font-mono text-[0.95rem] text-[#111111]">
-                    Usage: {formatInteger(profile.auxiliaryPercent)}%
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="border border-[#E5E5E5] bg-white px-3 py-3">
-                  <div className="font-mono text-[0.8rem] tracking-[0.08em] text-[#666666]">
-                    Total Memory
-                  </div>
-                  <div className="mt-2 font-mono text-[0.96rem] text-[#111111]">
-                    {formatFloat(profile.totalMemoryMb)} MB
-                  </div>
-                </div>
-                <div className="border border-[#E5E5E5] bg-white px-3 py-3">
-                  <div className="font-mono text-[0.8rem] tracking-[0.08em] text-[#666666]">
-                    Peak Aux
-                  </div>
-                  <div className="mt-2 font-mono text-[0.96rem] text-[#111111]">
-                    {formatInteger(profile.peakAuxKb)} KB
-                  </div>
-                </div>
-                <div className="border border-[#E5E5E5] bg-white px-3 py-3">
-                  <div className="font-mono text-[0.8rem] tracking-[0.08em] text-[#666666]">
-                    Complexity
-                  </div>
-                  <div className="mt-2 font-mono text-[0.96rem] text-[#111111]">
-                    {profile.complexity}
+                      return (
+                        <div
+                          key={item.id}
+                          className={[
+                            'flex h-12 items-center justify-center border font-mono transition-colors text-[0.92rem]',
+                            isActive
+                              ? 'border-[#111111] bg-[#111111] text-[#FAFAFA]'
+                              : isSorted
+                                ? 'border-[#E5E5E5] bg-[#F4F4F4] text-[#666666]'
+                                : 'border-[#111111] bg-white text-[#111111]',
+                          ].join(' ')}
+                        >
+                          {item.value}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               </div>
             </div>
-
-            <div className="space-y-6">
-              <div className="border border-[#E5E5E5] bg-[#FAFAFA] p-4">
-                <div className="font-mono text-[0.92rem] text-[#666666]">Recursion Monitor</div>
-                <div className="mt-4 flex h-32 items-end gap-2 border border-[#E5E5E5] bg-white p-3">
-                  {recursionBars.map((height, index) => (
-                    <div
-                      key={`bar-${index}`}
-                      className="flex-1 bg-[#111111]"
-                      style={{ height: `${Math.max(12, height)}%`, opacity: index <= profile.stackDepth ? 1 : 0.18 }}
-                    />
-                  ))}
-                </div>
-                <div className="mt-3 font-mono text-[0.95rem] text-[#111111]">
-                  Call Stack Depth: {profile.stackDepth}
-                </div>
-              </div>
-
-              <div className="border border-[#E5E5E5] bg-white p-4">
-                <div className="font-mono text-[0.92rem] text-[#666666]">System Log</div>
-                <div className="mt-3 space-y-2 font-mono text-[0.9rem] text-[#111111]">
-                  {profile.logs.map((line) => (
-                    <div key={line}>{line}</div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+          ) : null}
         </div>
       </SectionFrame>
     </div>
@@ -836,8 +767,10 @@ function PhysicalMachineMetaphorView() {
 
 function Topic01Lab({
   selectedView,
+  proofAlgorithm,
 }: Readonly<{
   selectedView: Topic01View
+  proofAlgorithm: ProofAlgorithm
 }>) {
   const activeView = selectedView
   const activeSummary =
@@ -846,28 +779,22 @@ function Topic01Lab({
 
   return (
     <section className="mt-4">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="font-mono text-[0.88rem] tracking-[0.16em] text-[#666666]">
-            TOPIC 01
-          </div>
-          <p className="mt-2 max-w-[760px] text-[1rem] leading-7 text-[#666666]">
-            Topic 01 works best as an explanation lab: compare asymptotic growth, inspect invariants
-            step by step, and translate abstract complexity into visible CPU, stack, and auxiliary
-            memory signals.
-          </p>
+      <div className="mb-4 space-y-1">
+        <div className="font-mono text-[0.88rem] tracking-[0.16em] text-[#666666]">
+          TOPIC 01
         </div>
-        <div className="font-mono text-[0.84rem] text-[#666666]">
-          {activeSummary}
-        </div>
+        <div className="font-mono text-[0.84rem] text-[#666666]">{activeSummary}</div>
       </div>
 
       {activeView === 'complexity-analysis' ? <ComplexityAnalysisView /> : null}
-      {activeView === 'correctness-invariants' ? <CorrectnessAndInvariantsView /> : null}
-      {activeView === 'physical-machine-metaphor' ? <PhysicalMachineMetaphorView /> : null}
+      {activeView === 'correctness-invariants' ? (
+        <CorrectnessAndInvariantsView
+          proofAlgorithm={proofAlgorithm}
+        />
+      ) : null}
     </section>
   )
 }
 
 export { Topic01Lab }
-export type { Topic01View }
+export type { ProofAlgorithm, Topic01View }

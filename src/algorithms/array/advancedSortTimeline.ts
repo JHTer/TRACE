@@ -13,6 +13,10 @@ import type {
   SortValueItem,
   Topic02AdvancedSortAlgorithmId,
 } from '../../domain/algorithms/types.ts'
+import {
+  MAX_COUNTING_SORT_VALUE,
+  MAX_RADIX_SORT_VALUE,
+} from '../../domain/algorithms/topic02SortLimits.ts'
 
 type BuildTimelineParams = Readonly<{
   algorithmId: Topic02AdvancedSortAlgorithmId
@@ -1026,13 +1030,19 @@ const buildHeapTimeline = (
 }
 
 const validateNonNegative = (values: readonly number[]) => {
-  const firstNegativeIndex = values.findIndex((value) => value < 0)
-  if (firstNegativeIndex < 0) {
-    return null
+  const firstNonIntegerIndex = values.findIndex((value) => !Number.isSafeInteger(value))
+  if (firstNonIntegerIndex >= 0) {
+    const invalidValue = values[firstNonIntegerIndex]
+    return `non-integer value ${invalidValue} at index ${firstNonIntegerIndex}; this workbench accepts non-negative integers only`
   }
 
-  const invalidValue = values[firstNegativeIndex]
-  return `negative value ${invalidValue} at index ${firstNegativeIndex}; this workbench accepts non-negative integers only`
+  const firstNegativeIndex = values.findIndex((value) => value < 0)
+  if (firstNegativeIndex >= 0) {
+    const invalidValue = values[firstNegativeIndex]
+    return `negative value ${invalidValue} at index ${firstNegativeIndex}; this workbench accepts non-negative integers only`
+  }
+
+  return null
 }
 
 const createValidationFailureTimeline = (
@@ -1106,12 +1116,20 @@ const buildCountingTimeline = (values: readonly number[]): AdvancedSortTimeline 
     return createValidationFailureTimeline('counting-sort', values, validationError)
   }
 
+  const maxValue = Math.max(0, ...values)
+  if (maxValue > MAX_COUNTING_SORT_VALUE) {
+    return createValidationFailureTimeline(
+      'counting-sort',
+      values,
+      `maximum value ${maxValue} exceeds limit ${MAX_COUNTING_SORT_VALUE}; this workbench caps bucket array size`,
+    )
+  }
+
   const items = createValueItems(values)
   const counters = createCounters()
   const frames: AdvancedSortFrame[] = []
   const addFrame = addFrameFactory(frames, items, counters)
 
-  const maxValue = Math.max(0, ...values)
   const counts = Array.from({ length: maxValue + 1 }, () => 0)
   const prefix = Array.from({ length: maxValue + 1 }, () => 0)
   const output: (SortValueItem | null)[] = Array.from({ length: items.length }, () => null)
@@ -1262,13 +1280,21 @@ const buildRadixTimeline = (values: readonly number[], base: RadixBase): Advance
     return createValidationFailureTimeline('radix-sort', values, validationError)
   }
 
+  const maxValue = Math.max(0, ...values)
+  if (maxValue > MAX_RADIX_SORT_VALUE) {
+    return createValidationFailureTimeline(
+      'radix-sort',
+      values,
+      `maximum value ${maxValue} exceeds limit ${MAX_RADIX_SORT_VALUE}; this workbench caps radix input range`,
+    )
+  }
+
   const items = createValueItems(values)
   const counters = createCounters()
   const frames: AdvancedSortFrame[] = []
   const addFrame = addFrameFactory(frames, items, counters)
 
   let working = [...items]
-  const maxValue = Math.max(0, ...values)
 
   const toDigit = (value: number, exponent: number) => Math.floor(value / exponent) % base
 

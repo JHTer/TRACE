@@ -12,7 +12,6 @@ const topicCatalog: readonly TopicSummary[] = [
     algorithms: [
       { id: 'complexity-analysis', label: 'Complexity Analysis' },
       { id: 'correctness-invariants', label: 'Correctness and Invariants' },
-      { id: 'physical-machine-metaphor', label: 'Physical Machine Metaphor' },
     ],
   }),
   createTopic({

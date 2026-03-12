@@ -3,6 +3,7 @@ import type {
   DynamicProgrammingCell,
   DynamicProgrammingCellTone,
   DynamicProgrammingFrame,
+  DynamicProgrammingInput,
   DynamicProgrammingMetric,
   DynamicProgrammingPanel,
   DynamicProgrammingPreset,
@@ -146,6 +147,15 @@ const selectPreset = <TPreset extends Readonly<{ id: string }>>(
   presetId: string | undefined,
 ) => presets.find((preset) => preset.id === presetId) ?? presets[0]
 
+const toPresetInputMap = <TPreset extends Readonly<{ id: string }>, TInput>(
+  presets: readonly TPreset[],
+  mapFn: (preset: TPreset) => TInput,
+): Readonly<Record<string, TInput>> =>
+  presets.reduce<Record<string, TInput>>((accumulator, preset) => {
+    accumulator[preset.id] = mapFn(preset)
+    return accumulator
+  }, {})
+
 const createCell = (
   value: string | number,
   tone: DynamicProgrammingCellTone = 'default',
@@ -267,9 +277,15 @@ const reconstructSalesmanHousePath = (
   return chosen.reverse()
 }
 
-const buildSalesmanHouseTimeline = (requestedPresetId?: string): DynamicProgrammingTimeline => {
+const buildSalesmanHouseTimeline = (
+  requestedPresetId?: string,
+  customInput?: DynamicProgrammingInput | null,
+): DynamicProgrammingTimeline => {
   const selectedPreset = selectPreset(salesmanHousePresets, requestedPresetId)
-  const houseValues = [...selectedPreset.values]
+  const houseValues =
+    customInput?.algorithmId === 'salesman-house'
+      ? [...customInput.values]
+      : [...selectedPreset.values]
   const dpValues: (number | null)[] = Array.from({ length: houseValues.length }, () => null)
   const choices: (string | null)[] = Array.from({ length: houseValues.length }, () => null)
   const frames: DynamicProgrammingFrame[] = []
@@ -377,6 +393,10 @@ const buildSalesmanHouseTimeline = (requestedPresetId?: string): DynamicProgramm
     directionNote: null,
     frames,
     presets: toPresetSummaries(salesmanHousePresets),
+    presetInputs: toPresetInputMap(salesmanHousePresets, (preset) => ({
+      algorithmId: 'salesman-house',
+      values: preset.values,
+    })),
     pseudocodeLines,
     recurrence: 'dp[i] = max(dp[i - 1], value[i] + dp[i - 2])',
     subtitle:
@@ -447,11 +467,17 @@ const buildMazePanels = (
   ]
 }
 
-const buildMazeTimeline = (requestedPresetId?: string): DynamicProgrammingTimeline => {
+const buildMazeTimeline = (
+  requestedPresetId?: string,
+  customInput?: DynamicProgrammingInput | null,
+): DynamicProgrammingTimeline => {
   const selectedPreset = selectPreset(mazePresets, requestedPresetId)
-  const size = selectedPreset.size
+  const size = customInput?.algorithmId === 'maze' ? customInput.size : selectedPreset.size
   const blockedKeys = new Set<string>(
-    selectedPreset.blockedCells.map((cell) => mazeKey(cell.rowIndex, cell.columnIndex)),
+    (customInput?.algorithmId === 'maze'
+      ? customInput.blockedCells
+      : selectedPreset.blockedCells
+    ).map((cell) => mazeKey(cell.rowIndex, cell.columnIndex)),
   )
   const dpValues = Array.from({ length: size }, () => Array.from({ length: size }, () => null as number | null))
   const frames: DynamicProgrammingFrame[] = []
@@ -598,6 +624,11 @@ const buildMazeTimeline = (requestedPresetId?: string): DynamicProgrammingTimeli
       'This page counts paths from each cell to the target, so the table is filled from target -> initial even though the question is asked from initial -> target.',
     frames,
     presets: toPresetSummaries(mazePresets),
+    presetInputs: toPresetInputMap(mazePresets, (preset) => ({
+      algorithmId: 'maze',
+      size: preset.size,
+      blockedCells: preset.blockedCells,
+    })),
     pseudocodeLines,
     recurrence:
       'DP[i, j] = 0 if blocked, 1 at the target, otherwise DP[i + 1, j] + DP[i, j + 1] with boundary-row/column cases',
@@ -682,9 +713,13 @@ const reconstructLISPath = (
 
 const buildLongestIncreasingSubsequenceTimeline = (
   requestedPresetId?: string,
+  customInput?: DynamicProgrammingInput | null,
 ): DynamicProgrammingTimeline => {
   const selectedPreset = selectPreset(lisPresets, requestedPresetId)
-  const values = [...selectedPreset.values]
+  const values =
+    customInput?.algorithmId === 'longest-increasing-subsequence'
+      ? [...customInput.values]
+      : [...selectedPreset.values]
   const dpValues = Array.from({ length: values.length }, () => 1)
   const predecessors = Array.from({ length: values.length }, () => null as number | null)
   const frames: DynamicProgrammingFrame[] = []
@@ -790,6 +825,10 @@ const buildLongestIncreasingSubsequenceTimeline = (
     directionNote: null,
     frames,
     presets: toPresetSummaries(lisPresets),
+    presetInputs: toPresetInputMap(lisPresets, (preset) => ({
+      algorithmId: 'longest-increasing-subsequence',
+      values: preset.values,
+    })),
     pseudocodeLines,
     recurrence: 'dp[i] = 1 + max(dp[j]) for all j < i with a[j] < a[i]',
     subtitle:
@@ -831,10 +870,11 @@ const buildStringMatrixPanel = (
 
 const buildLongestCommonSubsequenceTimeline = (
   requestedPresetId?: string,
+  customInput?: DynamicProgrammingInput | null,
 ): DynamicProgrammingTimeline => {
   const selectedPreset = selectPreset(lcsPresets, requestedPresetId)
-  const left = selectedPreset.left
-  const right = selectedPreset.right
+  const left = customInput?.algorithmId === 'longest-common-subsequence' ? customInput.left : selectedPreset.left
+  const right = customInput?.algorithmId === 'longest-common-subsequence' ? customInput.right : selectedPreset.right
   const rows = left.length + 1
   const columns = right.length + 1
   const table = Array.from({ length: rows }, () => Array.from({ length: columns }, () => 0))
@@ -968,6 +1008,11 @@ const buildLongestCommonSubsequenceTimeline = (
     directionNote: null,
     frames,
     presets: toPresetSummaries(lcsPresets),
+    presetInputs: toPresetInputMap(lcsPresets, (preset) => ({
+      algorithmId: 'longest-common-subsequence',
+      left: preset.left,
+      right: preset.right,
+    })),
     pseudocodeLines,
     recurrence: 'dp[i][j] = if match then dp[i - 1][j - 1] + 1 else max(dp[i - 1][j], dp[i][j - 1])',
     subtitle:
@@ -976,10 +1021,13 @@ const buildLongestCommonSubsequenceTimeline = (
   }
 }
 
-const buildEditDistanceTimeline = (requestedPresetId?: string): DynamicProgrammingTimeline => {
+const buildEditDistanceTimeline = (
+  requestedPresetId?: string,
+  customInput?: DynamicProgrammingInput | null,
+): DynamicProgrammingTimeline => {
   const selectedPreset = selectPreset(editDistancePresets, requestedPresetId)
-  const left = selectedPreset.left
-  const right = selectedPreset.right
+  const left = customInput?.algorithmId === 'edit-distance' ? customInput.left : selectedPreset.left
+  const right = customInput?.algorithmId === 'edit-distance' ? customInput.right : selectedPreset.right
   const rows = left.length + 1
   const columns = right.length + 1
   const table = Array.from({ length: rows }, () => Array.from({ length: columns }, () => 0))
@@ -1150,6 +1198,11 @@ const buildEditDistanceTimeline = (requestedPresetId?: string): DynamicProgrammi
     directionNote: null,
     frames,
     presets: toPresetSummaries(editDistancePresets),
+    presetInputs: toPresetInputMap(editDistancePresets, (preset) => ({
+      algorithmId: 'edit-distance',
+      left: preset.left,
+      right: preset.right,
+    })),
     pseudocodeLines,
     recurrence: 'dp[i][j] = min(delete, insert, substitute), with zero-cost diagonal carry on matches',
     subtitle:
@@ -1191,9 +1244,15 @@ const buildMaximumSubarrayPanels = (
   ),
 ]
 
-const buildMaximumSubarrayTimeline = (requestedPresetId?: string): DynamicProgrammingTimeline => {
+const buildMaximumSubarrayTimeline = (
+  requestedPresetId?: string,
+  customInput?: DynamicProgrammingInput | null,
+): DynamicProgrammingTimeline => {
   const selectedPreset = selectPreset(maximumSubarrayPresets, requestedPresetId)
-  const values = [...selectedPreset.values]
+  const values =
+    customInput?.algorithmId === 'maximum-subarray'
+      ? [...customInput.values]
+      : [...selectedPreset.values]
   const bestEndingHere: (number | null)[] = Array.from({ length: values.length }, () => null)
   const frames: DynamicProgrammingFrame[] = []
 
@@ -1293,6 +1352,10 @@ const buildMaximumSubarrayTimeline = (requestedPresetId?: string): DynamicProgra
     directionNote: null,
     frames,
     presets: toPresetSummaries(maximumSubarrayPresets),
+    presetInputs: toPresetInputMap(maximumSubarrayPresets, (preset) => ({
+      algorithmId: 'maximum-subarray',
+      values: preset.values,
+    })),
     pseudocodeLines,
     recurrence: 'bestEndingHere[i] = max(a[i], a[i] + bestEndingHere[i - 1])',
     subtitle:
@@ -1304,20 +1367,21 @@ const buildMaximumSubarrayTimeline = (requestedPresetId?: string): DynamicProgra
 const buildDynamicProgrammingTimeline = (
   algorithmId: DynamicProgrammingAlgorithmId,
   requestedPresetId?: string,
+  customInput?: DynamicProgrammingInput | null,
 ): DynamicProgrammingTimeline => {
   switch (algorithmId) {
     case 'salesman-house':
-      return buildSalesmanHouseTimeline(requestedPresetId)
+      return buildSalesmanHouseTimeline(requestedPresetId, customInput)
     case 'maze':
-      return buildMazeTimeline(requestedPresetId)
+      return buildMazeTimeline(requestedPresetId, customInput)
     case 'longest-increasing-subsequence':
-      return buildLongestIncreasingSubsequenceTimeline(requestedPresetId)
+      return buildLongestIncreasingSubsequenceTimeline(requestedPresetId, customInput)
     case 'longest-common-subsequence':
-      return buildLongestCommonSubsequenceTimeline(requestedPresetId)
+      return buildLongestCommonSubsequenceTimeline(requestedPresetId, customInput)
     case 'edit-distance':
-      return buildEditDistanceTimeline(requestedPresetId)
+      return buildEditDistanceTimeline(requestedPresetId, customInput)
     case 'maximum-subarray':
-      return buildMaximumSubarrayTimeline(requestedPresetId)
+      return buildMaximumSubarrayTimeline(requestedPresetId, customInput)
   }
 }
 

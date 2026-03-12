@@ -1,16 +1,26 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { buildDynamicProgrammingTimeline } from '../../algorithms/dp/index.ts'
+import {
+  parseMaze,
+  parseNumberCsvForAlgorithm,
+  parseStringPair,
+} from '../../algorithms/dp/input-parsers.ts'
 import type {
   DynamicProgrammingAlgorithmId,
   DynamicProgrammingPanel,
-  DynamicProgrammingTimeline,
 } from '../../domain/algorithms/types.ts'
 import { getDynamicProgrammingCellToneClassName } from '../../visualizers/dp/index.ts'
 
 type Topic04View = DynamicProgrammingAlgorithmId
 
 const playbackStepMs = 900
+const inputClass =
+  'border border-[#E5E5E5] bg-white px-2.5 py-1 font-mono text-[0.84rem] text-[#111111] outline-none transition-colors focus:border-[#111111]'
+
+const toCsv = (values: readonly number[]) => values.join(', ')
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
 const isEditableTarget = (target: EventTarget | null) =>
   target instanceof HTMLInputElement ||
@@ -120,24 +130,150 @@ function Topic04DynamicProgrammingLab({
 }>) {
   const baselineTimeline = useMemo(() => buildDynamicProgrammingTimeline(algorithmId), [algorithmId])
   const [selectedPresetId, setSelectedPresetId] = useState(baselineTimeline.activePresetId)
+  const [salesmanValuesText, setSalesmanValuesText] = useState(() => {
+    const presetInput = baselineTimeline.presetInputs[baselineTimeline.activePresetId]
+    return presetInput?.algorithmId === 'salesman-house' ? toCsv(presetInput.values) : ''
+  })
+  const [mazeSizeText, setMazeSizeText] = useState(() => {
+    const presetInput = baselineTimeline.presetInputs[baselineTimeline.activePresetId]
+    return presetInput?.algorithmId === 'maze' ? String(presetInput.size) : '5'
+  })
+  const [mazeBlockedKeys, setMazeBlockedKeys] = useState<Set<string>>(() => {
+    const presetInput = baselineTimeline.presetInputs[baselineTimeline.activePresetId]
+    if (presetInput?.algorithmId === 'maze') {
+      return new Set(presetInput.blockedCells.map((cell) => `${cell.rowIndex}:${cell.columnIndex}`))
+    }
+    return new Set<string>()
+  })
+  const [lisValuesText, setLisValuesText] = useState(() => {
+    const presetInput = baselineTimeline.presetInputs[baselineTimeline.activePresetId]
+    return presetInput?.algorithmId === 'longest-increasing-subsequence' ? toCsv(presetInput.values) : ''
+  })
+  const [lcsLeftText, setLcsLeftText] = useState(() => {
+    const presetInput = baselineTimeline.presetInputs[baselineTimeline.activePresetId]
+    return presetInput?.algorithmId === 'longest-common-subsequence' ? presetInput.left : ''
+  })
+  const [lcsRightText, setLcsRightText] = useState(() => {
+    const presetInput = baselineTimeline.presetInputs[baselineTimeline.activePresetId]
+    return presetInput?.algorithmId === 'longest-common-subsequence' ? presetInput.right : ''
+  })
+  const [editLeftText, setEditLeftText] = useState(() => {
+    const presetInput = baselineTimeline.presetInputs[baselineTimeline.activePresetId]
+    return presetInput?.algorithmId === 'edit-distance' ? presetInput.left : ''
+  })
+  const [editRightText, setEditRightText] = useState(() => {
+    const presetInput = baselineTimeline.presetInputs[baselineTimeline.activePresetId]
+    return presetInput?.algorithmId === 'edit-distance' ? presetInput.right : ''
+  })
+  const [maximumSubarrayText, setMaximumSubarrayText] = useState(() => {
+    const presetInput = baselineTimeline.presetInputs[baselineTimeline.activePresetId]
+    return presetInput?.algorithmId === 'maximum-subarray' ? toCsv(presetInput.values) : ''
+  })
   const [frameIndex, setFrameIndex] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
 
+  const applyPresetInput = useCallback(
+    (presetId: string) => {
+      const presetInput = baselineTimeline.presetInputs[presetId]
+      if (presetInput === undefined) {
+        return
+      }
+
+      if (presetInput.algorithmId === 'salesman-house') {
+        setSalesmanValuesText(toCsv(presetInput.values))
+      }
+
+      if (presetInput.algorithmId === 'maze') {
+        setMazeSizeText(String(presetInput.size))
+        setMazeBlockedKeys(
+          new Set(presetInput.blockedCells.map((cell) => `${cell.rowIndex}:${cell.columnIndex}`)),
+        )
+      }
+
+      if (presetInput.algorithmId === 'longest-increasing-subsequence') {
+        setLisValuesText(toCsv(presetInput.values))
+      }
+
+      if (presetInput.algorithmId === 'longest-common-subsequence') {
+        setLcsLeftText(presetInput.left)
+        setLcsRightText(presetInput.right)
+      }
+
+      if (presetInput.algorithmId === 'edit-distance') {
+        setEditLeftText(presetInput.left)
+        setEditRightText(presetInput.right)
+      }
+
+      if (presetInput.algorithmId === 'maximum-subarray') {
+        setMaximumSubarrayText(toCsv(presetInput.values))
+      }
+    },
+    [baselineTimeline.presetInputs],
+  )
+
   useEffect(() => {
     setSelectedPresetId(baselineTimeline.activePresetId)
+    applyPresetInput(baselineTimeline.activePresetId)
     setFrameIndex(0)
     setIsPlaying(false)
-  }, [baselineTimeline.activePresetId, algorithmId])
+  }, [applyPresetInput, baselineTimeline.activePresetId, algorithmId])
+
+  const parsedInput = useMemo(() => {
+    switch (algorithmId) {
+      case 'salesman-house':
+        return parseNumberCsvForAlgorithm('salesman-house', salesmanValuesText, { minLength: 2 })
+      case 'maze':
+        return parseMaze(mazeSizeText, mazeBlockedKeys)
+      case 'longest-increasing-subsequence':
+        return parseNumberCsvForAlgorithm('longest-increasing-subsequence', lisValuesText, { minLength: 2 })
+      case 'longest-common-subsequence':
+        return parseStringPair('longest-common-subsequence', lcsLeftText, lcsRightText, { maxLength: 12 })
+      case 'edit-distance':
+        return parseStringPair('edit-distance', editLeftText, editRightText, { maxLength: 12 })
+      case 'maximum-subarray':
+        return parseNumberCsvForAlgorithm('maximum-subarray', maximumSubarrayText, { minLength: 2 })
+    }
+  }, [
+    algorithmId,
+    editLeftText,
+    editRightText,
+    lcsLeftText,
+    lcsRightText,
+    lisValuesText,
+    mazeBlockedKeys,
+    mazeSizeText,
+    maximumSubarrayText,
+    salesmanValuesText,
+  ])
+
+  const requestedPresetId =
+    selectedPresetId === 'custom' ? baselineTimeline.activePresetId : selectedPresetId
 
   const timeline = useMemo(
-    () => buildDynamicProgrammingTimeline(algorithmId, selectedPresetId),
-    [algorithmId, selectedPresetId],
+    () => buildDynamicProgrammingTimeline(algorithmId, requestedPresetId, parsedInput?.input ?? null),
+    [algorithmId, parsedInput?.input, requestedPresetId],
   )
 
   useEffect(() => {
     setFrameIndex(0)
     setIsPlaying(false)
   }, [selectedPresetId])
+
+  useEffect(() => {
+    if (selectedPresetId === 'custom') {
+      return
+    }
+    applyPresetInput(selectedPresetId)
+  }, [applyPresetInput, selectedPresetId])
+
+  const validationErrors = parsedInput?.errors ?? []
+  const hasValidationError = validationErrors.length > 0
+
+  useEffect(() => {
+    if (hasValidationError) {
+      setIsPlaying(false)
+    }
+  }, [hasValidationError])
 
   const lastFrameIndex = timeline.frames.length - 1
   const boundedFrameIndex = Math.min(frameIndex, Math.max(0, lastFrameIndex))
@@ -201,6 +337,9 @@ function Topic04DynamicProgrammingLab({
   }
 
   const goToNextStep = () => {
+    if (hasValidationError) {
+      return
+    }
     setFrameIndex((current) => Math.min(lastFrameIndex, current + 1))
   }
 
@@ -209,7 +348,16 @@ function Topic04DynamicProgrammingLab({
     setFrameIndex(0)
   }
 
+  const activateCustomMode = () => {
+    setSelectedPresetId('custom')
+    setIsPlaying(false)
+    setFrameIndex(0)
+  }
+
   const togglePlay = () => {
+    if (hasValidationError) {
+      return
+    }
     if (lastFrameIndex <= 0) {
       return
     }
@@ -224,6 +372,9 @@ function Topic04DynamicProgrammingLab({
   }
 
   useEffect(() => {
+    if (hasValidationError) {
+      return
+    }
     if (!isPlaying) {
       return
     }
@@ -246,7 +397,7 @@ function Topic04DynamicProgrammingLab({
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [boundedFrameIndex, isPlaying, lastFrameIndex])
+  }, [boundedFrameIndex, hasValidationError, isPlaying, lastFrameIndex])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -260,11 +411,17 @@ function Topic04DynamicProgrammingLab({
       }
 
       if (event.key === 'ArrowRight') {
+        if (hasValidationError) {
+          return
+        }
         event.preventDefault()
         goToNextStep()
       }
 
       if (event.key === ' ' || event.code === 'Space') {
+        if (hasValidationError) {
+          return
+        }
         event.preventDefault()
         togglePlay()
       }
@@ -272,7 +429,258 @@ function Topic04DynamicProgrammingLab({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [boundedFrameIndex, lastFrameIndex, isPlaying])
+  }, [boundedFrameIndex, hasValidationError, lastFrameIndex, isPlaying])
+
+  const renderCustomDatasetControls = () => {
+    if (algorithmId === 'salesman-house') {
+      return (
+        <div className="space-y-2">
+          <label className="font-mono text-[0.78rem] tracking-[0.08em] text-[#666666]">
+            House values (comma or space separated)
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className={inputClass}
+              onChange={(event) => {
+                activateCustomMode()
+                setSalesmanValuesText(event.target.value)
+              }}
+              placeholder="e.g. 5, 1, 9, 4, 10"
+              value={salesmanValuesText}
+            />
+            <button
+              className="border border-[#E5E5E5] bg-white px-2.5 py-1 font-mono text-[0.8rem] text-[#111111] transition-colors hover:border-[#111111]"
+              onClick={() => {
+                activateCustomMode()
+                const tokenCount = salesmanValuesText.split(/[\s,]+/).filter((token) => token.length > 0).length
+                const fallbackLength = 10
+                const length = clamp(tokenCount || fallbackLength, 2, 20)
+                const randomValues = Array.from({ length }, () => Math.floor(Math.random() * 99) + 1)
+                setSalesmanValuesText(toCsv(randomValues))
+              }}
+              type="button"
+            >
+              Random
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    if (algorithmId === 'maze') {
+      const sizeNumber = Number(mazeSizeText)
+      const parsedSize = Number.isFinite(sizeNumber) ? clamp(Math.round(sizeNumber), 3, 8) : 5
+      const rows = Array.from({ length: parsedSize }, (_, index) => index)
+      const columns = rows
+
+      const toggleBlocked = (rowIndex: number, columnIndex: number) => {
+        if ((rowIndex === 0 && columnIndex === 0) || (rowIndex === parsedSize - 1 && columnIndex === parsedSize - 1)) {
+          return
+        }
+        activateCustomMode()
+        setMazeBlockedKeys((current) => {
+          const next = new Set(current)
+          const key = `${rowIndex}:${columnIndex}`
+          if (next.has(key)) {
+            next.delete(key)
+          } else {
+            next.add(key)
+          }
+          return next
+        })
+      }
+
+      return (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <label className="font-mono text-[0.78rem] tracking-[0.08em] text-[#666666]">Grid size (3-8)</label>
+            <input
+              className={inputClass}
+              inputMode="numeric"
+              min={3}
+              max={8}
+              onChange={(event) => {
+                activateCustomMode()
+                setMazeSizeText(event.target.value)
+              }}
+              type="number"
+              value={mazeSizeText}
+            />
+          </div>
+          <div className="space-y-1">
+            {rows.map((rowIndex) => (
+              <div key={`maze-row-${rowIndex}`} className="flex gap-1">
+                {columns.map((columnIndex) => {
+                  const key = `${rowIndex}:${columnIndex}`
+                  const isBlocked = mazeBlockedKeys.has(key)
+                  const isStart = rowIndex === 0 && columnIndex === 0
+                  const isTarget = rowIndex === parsedSize - 1 && columnIndex === parsedSize - 1
+                  const label = isStart ? 'S' : isTarget ? 'T' : isBlocked ? 'X' : '·'
+                  const toneClass = isStart || isTarget ? 'bg-[#111111] text-[#FAFAFA]' : isBlocked ? 'bg-[#E5E5E5]' : 'bg-white'
+                  return (
+                    <button
+                      key={key}
+                      className={[
+                        'h-8 w-8 border border-[#E5E5E5] text-[0.78rem] font-mono transition-colors',
+                        toneClass,
+                        isStart || isTarget ? 'cursor-not-allowed' : 'hover:border-[#111111]',
+                      ].join(' ')}
+                      disabled={isStart || isTarget}
+                      onClick={() => toggleBlocked(rowIndex, columnIndex)}
+                      type="button"
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
+    if (algorithmId === 'longest-increasing-subsequence') {
+      return (
+        <div className="space-y-2">
+          <label className="font-mono text-[0.78rem] tracking-[0.08em] text-[#666666]">
+            Input array (comma or space separated)
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className={inputClass}
+              onChange={(event) => {
+                activateCustomMode()
+                setLisValuesText(event.target.value)
+              }}
+              placeholder="e.g. 3, 4, 1, 2, 8, 5"
+              value={lisValuesText}
+            />
+            <button
+              className="border border-[#E5E5E5] bg-white px-2.5 py-1 font-mono text-[0.8rem] text-[#111111] transition-colors hover:border-[#111111]"
+              onClick={() => {
+                activateCustomMode()
+                const tokenCount = lisValuesText.split(/[\s,]+/).filter((token) => token.length > 0).length
+                const fallbackLength = 12
+                const length = clamp(tokenCount || fallbackLength, 2, 20)
+                const randomValues = Array.from({ length }, () => Math.floor(Math.random() * 99) + 1)
+                setLisValuesText(toCsv(randomValues))
+              }}
+              type="button"
+            >
+              Random
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    if (algorithmId === 'longest-common-subsequence') {
+      return (
+        <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
+          <div className="space-y-1">
+            <label className="font-mono text-[0.78rem] tracking-[0.08em] text-[#666666]">Left string</label>
+            <input
+              className={inputClass}
+              maxLength={12}
+              onChange={(event) => {
+                activateCustomMode()
+                setLcsLeftText(event.target.value)
+              }}
+              placeholder="e.g. ABCDA"
+              value={lcsLeftText}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="font-mono text-[0.78rem] tracking-[0.08em] text-[#666666]">Right string</label>
+            <input
+              className={inputClass}
+              maxLength={12}
+              onChange={(event) => {
+                activateCustomMode()
+                setLcsRightText(event.target.value)
+              }}
+              placeholder="e.g. ACBA"
+              value={lcsRightText}
+            />
+          </div>
+        </div>
+      )
+    }
+
+    if (algorithmId === 'edit-distance') {
+      return (
+        <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
+          <div className="space-y-1">
+            <label className="font-mono text-[0.78rem] tracking-[0.08em] text-[#666666]">Source</label>
+            <input
+              className={inputClass}
+              maxLength={12}
+              onChange={(event) => {
+                activateCustomMode()
+                setEditLeftText(event.target.value)
+              }}
+              placeholder="e.g. intention"
+              value={editLeftText}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="font-mono text-[0.78rem] tracking-[0.08em] text-[#666666]">Target</label>
+            <input
+              className={inputClass}
+              maxLength={12}
+              onChange={(event) => {
+                activateCustomMode()
+                setEditRightText(event.target.value)
+              }}
+              placeholder="e.g. execution"
+              value={editRightText}
+            />
+          </div>
+        </div>
+      )
+    }
+
+    if (algorithmId === 'maximum-subarray') {
+      return (
+        <div className="space-y-2">
+          <label className="font-mono text-[0.78rem] tracking-[0.08em] text-[#666666]">
+            Input array (comma or space separated)
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className={inputClass}
+              onChange={(event) => {
+                activateCustomMode()
+                setMaximumSubarrayText(event.target.value)
+              }}
+              placeholder="e.g. -2, 1, -3, 4, -1, 2, 1, -5, 4"
+              value={maximumSubarrayText}
+            />
+            <button
+              className="border border-[#E5E5E5] bg-white px-2.5 py-1 font-mono text-[0.8rem] text-[#111111] transition-colors hover:border-[#111111]"
+              onClick={() => {
+                activateCustomMode()
+                const tokenCount = maximumSubarrayText.split(/[\s,]+/).filter((token) => token.length > 0).length
+                const fallbackLength = 10
+                const length = clamp(tokenCount || fallbackLength, 2, 20)
+                const randomValues = Array.from(
+                  { length },
+                  () => Math.floor(Math.random() * 41) - 20,
+                )
+                setMaximumSubarrayText(toCsv(randomValues))
+              }}
+              type="button"
+            >
+              Random
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    return null
+  }
 
   if (activeFrame === undefined) {
     return null
@@ -306,14 +714,26 @@ function Topic04DynamicProgrammingLab({
               Previous
             </button>
             <button
-              className="border border-[#111111] bg-[#111111] px-2.5 py-1 font-mono text-[0.82rem] text-[#FAFAFA] transition-colors hover:bg-white hover:text-[#111111]"
+              className={[
+                'border border-[#111111] px-2.5 py-1 font-mono text-[0.82rem] transition-colors',
+                hasValidationError
+                  ? 'bg-[#F4F4F4] text-[#999999] cursor-not-allowed'
+                  : 'bg-[#111111] text-[#FAFAFA] hover:bg-white hover:text-[#111111]',
+              ].join(' ')}
+              disabled={hasValidationError}
               onClick={togglePlay}
               type="button"
             >
               {isPlaying ? 'Pause' : 'Play'}
             </button>
             <button
-              className="border border-[#111111] bg-white px-2.5 py-1 font-mono text-[0.82rem] text-[#111111] transition-colors hover:bg-[#111111] hover:text-[#FAFAFA]"
+              className={[
+                'border px-2.5 py-1 font-mono text-[0.82rem] transition-colors',
+                hasValidationError
+                  ? 'border-[#E5E5E5] bg-[#F4F4F4] text-[#999999] cursor-not-allowed'
+                  : 'border-[#111111] bg-white text-[#111111] hover:bg-[#111111] hover:text-[#FAFAFA]',
+              ].join(' ')}
+              disabled={hasValidationError}
               onClick={goToNextStep}
               type="button"
             >
@@ -331,27 +751,18 @@ function Topic04DynamicProgrammingLab({
 
         <div className="border-t border-[#E5E5E5] px-4 py-3">
           <div className="font-mono text-[0.8rem] tracking-[0.08em] text-[#666666]">
-            DATASET PRESET
+            CUSTOM DATASET
           </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {timeline.presets.map((preset) => {
-              const isActive = preset.id === selectedPresetId
-              return (
-                <button
-                  key={preset.id}
-                  className={[
-                    'border px-2.5 py-1 font-mono text-[0.8rem] transition-colors',
-                    isActive
-                      ? 'border-[#111111] bg-[#111111] text-[#FAFAFA]'
-                      : 'border-[#E5E5E5] bg-white text-[#111111] hover:border-[#111111]',
-                  ].join(' ')}
-                  onClick={() => setSelectedPresetId(preset.id)}
-                  type="button"
-                >
-                  {preset.label}
-                </button>
-              )
-            })}
+          <div className="mt-2 space-y-3">
+            {renderCustomDatasetControls()}
+            {selectedPresetId === 'custom' ? (
+              <div className="font-mono text-[0.78rem] text-[#666666]">Custom input active.</div>
+            ) : null}
+            {hasValidationError ? (
+              <div className="rounded border border-[#B42318] bg-[#FFF4F4] px-2 py-1 font-mono text-[0.78rem] text-[#B42318]">
+                {validationErrors.join(' ')}
+              </div>
+            ) : null}
           </div>
         </div>
 

@@ -12,7 +12,7 @@ import {
   DirectoryTree,
   type DirectorySelection,
 } from '../components/index/DirectoryTree.tsx'
-import { Topic01Lab, type Topic01View } from '../components/topic-01/Topic01Lab.tsx'
+import { Topic01Lab, type ProofAlgorithm, type Topic01View } from '../components/topic-01/Topic01Lab.tsx'
 import { Topic02ElementarySortLab } from '../components/topic-02/Topic02ElementarySortLab.tsx'
 import { Topic02AdvancedSortLab } from '../components/topic-02/Topic02AdvancedSortLab.tsx'
 import { Topic02MergeSortLab } from '../components/topic-02/Topic02MergeSortLab.tsx'
@@ -48,8 +48,14 @@ import type {
 const topic01DirectoryLabelByView: Record<Topic01View, string> = {
   'complexity-analysis': 'COMPLEXITY ANALYSIS',
   'correctness-invariants': 'CORRECTNESS AND INVARIANTS',
-  'physical-machine-metaphor': 'PHYSICAL MACHINE METAPHOR',
 }
+
+const correctnessAlgorithmOptions: readonly PickerOption[] = [
+  { id: 'binary-search', label: 'Binary Search' },
+  { id: 'bubble-sort', label: 'Bubble Sort' },
+  { id: 'selection-sort', label: 'Selection Sort' },
+  { id: 'insertion-sort', label: 'Insertion Sort' },
+] as const
 
 type Topic02View =
   | ElementarySortAlgorithmId
@@ -105,7 +111,6 @@ const workbenchRouteMap: Readonly<Record<string, ActiveScreen>> = {
   'menu:home': { kind: 'menu' },
   'topic-1:complexity-analysis': { kind: 'topic-1', view: 'complexity-analysis' },
   'topic-1:correctness-invariants': { kind: 'topic-1', view: 'correctness-invariants' },
-  'topic-1:physical-machine-metaphor': { kind: 'topic-1', view: 'physical-machine-metaphor' },
   'topic-2:bubble-sort': { kind: 'topic-2', view: 'bubble-sort' },
   'topic-2:selection-sort': { kind: 'topic-2', view: 'selection-sort' },
   'topic-2:insertion-sort': { kind: 'topic-2', view: 'insertion-sort' },
@@ -420,6 +425,8 @@ function IndexPage() {
     resolveScreenByRouteKey(getRouteKeyFromLocation()),
   )
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
+  const [correctnessAlgorithm, setCorrectnessAlgorithm] =
+    useState<ProofAlgorithm>('binary-search')
   const [quicksortVariant, setQuicksortVariant] = useState<QuicksortVariantId>('lomuto')
   const [quickselectStrategy, setQuickselectStrategy] =
     useState<QuickselectStrategyId>('lomuto')
@@ -438,6 +445,10 @@ function IndexPage() {
 
     if (nextScreen.kind === 'topic-2' && nextScreen.view === 'quickselect') {
       setQuickselectStrategy('lomuto')
+    }
+
+    if (nextScreen.kind !== 'topic-1' || nextScreen.view !== 'correctness-invariants') {
+      setCorrectnessAlgorithm('binary-search')
     }
 
     setActiveScreen(nextScreen)
@@ -506,7 +517,30 @@ function IndexPage() {
 
   const breadcrumbSuffixNode: ReactNode = useMemo(() => {
     if (activeScreen.kind === 'topic-1') {
-      return topic01DirectoryLabelByView[activeScreen.view]
+      const baseLabel = topic01DirectoryLabelByView[activeScreen.view]
+      if (activeScreen.view === 'correctness-invariants') {
+        return (
+          <>
+            {baseLabel} /{' '}
+            <BreadcrumbDirectoryPicker
+              ariaLabel="Correctness algorithm"
+              onSelect={(nextAlgorithmId) => {
+                if (
+                  nextAlgorithmId === 'binary-search' ||
+                  nextAlgorithmId === 'bubble-sort' ||
+                  nextAlgorithmId === 'selection-sort' ||
+                  nextAlgorithmId === 'insertion-sort'
+                ) {
+                  setCorrectnessAlgorithm(nextAlgorithmId)
+                }
+              }}
+              options={correctnessAlgorithmOptions}
+              selectedId={correctnessAlgorithm}
+            />
+          </>
+        )
+      }
+      return baseLabel
     }
 
     if (activeScreen.kind === 'topic-3') {
@@ -632,7 +666,10 @@ function IndexPage() {
             </div>
 
             {activeScreen.kind === 'topic-1' ? (
-              <Topic01Lab selectedView={activeScreen.view} />
+              <Topic01Lab
+                proofAlgorithm={correctnessAlgorithm}
+                selectedView={activeScreen.view}
+              />
             ) : (
               <>
                 {activeScreen.kind === 'topic-2' ? (

@@ -13,19 +13,20 @@ import {
   quickselectStrategyLabel,
   quicksortVariantLabel,
 } from '../../algorithms/array/partitionSelectionTimeline.ts'
+import { MAX_TOPIC02_SORT_DATASET_LENGTH } from '../../domain/algorithms/topic02SortLimits.ts'
 import type {
   PartitionFrame,
   PartitionSelectionAlgorithmId,
   QuickselectStrategyId,
   QuicksortVariantId,
   SortCounters,
-  SortPresetId,
   SortRegion,
 } from '../../domain/algorithms/types.ts'
+import { parseSortDataset } from './sortDatasetInput.ts'
 
 const animationMs = 280
 const cellWidthPx = 56
-const defaultPresetId: SortPresetId = 'with-duplicates'
+const defaultValues = partitionSelectionPresets[0]?.values ?? []
 
 const algorithmSubtitle: Record<PartitionSelectionAlgorithmId, string> = {
   quicksort:
@@ -245,20 +246,12 @@ function Topic02PartitionSelectionLab({
   quicksortVariant: QuicksortVariantId
   quickselectStrategy: QuickselectStrategyId
 }>) {
-  const [presetId, setPresetId] = useState<SortPresetId>(defaultPresetId)
-  const [kRank, setKRank] = useState<number>(
-    getDefaultRank1Based(
-      partitionSelectionPresets.find((preset) => preset.id === defaultPresetId)?.values ??
-        partitionSelectionPresets[0]?.values ??
-        [],
-    ),
-  )
+  const [values, setValues] = useState<readonly number[]>(() => [...defaultValues])
+  const [draft, setDraft] = useState(() => defaultValues.join(', '))
+  const [validationError, setValidationError] = useState<string | null>(null)
+  const [kRank, setKRank] = useState<number>(() => getDefaultRank1Based(defaultValues))
   const [lineEventIndex, setLineEventIndex] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
-
-  const selectedPreset =
-    partitionSelectionPresets.find((preset) => preset.id === presetId) ??
-    partitionSelectionPresets[0]
 
   const isSelectionView = isSelectionAlgorithm(algorithmId)
 
@@ -267,27 +260,27 @@ function Topic02PartitionSelectionLab({
       return
     }
 
-    setKRank(getDefaultRank1Based(selectedPreset.values))
-  }, [isSelectionView, presetId, selectedPreset.values])
+    setKRank(getDefaultRank1Based(values))
+  }, [isSelectionView, values])
 
-  const boundedRank = normalizeRank1Based(kRank, selectedPreset.values)
+  const boundedRank = normalizeRank1Based(kRank, values)
 
   const timeline = useMemo(() => {
     if (algorithmId === 'quicksort') {
-      return createQuicksortTimeline(quicksortVariant, selectedPreset.values)
+      return createQuicksortTimeline(quicksortVariant, values)
     }
 
     if (algorithmId === 'quickselect') {
-      return createQuickselectTimeline(quickselectStrategy, selectedPreset.values, boundedRank)
+      return createQuickselectTimeline(quickselectStrategy, values, boundedRank)
     }
 
-    return createMedianOfMediansTimeline(selectedPreset.values, boundedRank)
+    return createMedianOfMediansTimeline(values, boundedRank)
   }, [
     algorithmId,
     boundedRank,
     quickselectStrategy,
     quicksortVariant,
-    selectedPreset.values,
+    values,
   ])
 
   const lineEvents = useMemo(
@@ -354,7 +347,7 @@ function Topic02PartitionSelectionLab({
   useEffect(() => {
     setIsPlaying(false)
     setLineEventIndex(0)
-  }, [algorithmId, quicksortVariant, quickselectStrategy, presetId, boundedRank])
+  }, [algorithmId, quicksortVariant, quickselectStrategy, values, boundedRank])
 
   useEffect(() => {
     if (!isPlaying) {
@@ -461,30 +454,56 @@ function Topic02PartitionSelectionLab({
         </div>
 
         <div className="border-t border-[#E5E5E5] px-4 py-3">
-          <div className="font-mono text-[0.8rem] tracking-[0.06em] text-[#666666]">DATASET PRESET</div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {partitionSelectionPresets.map((preset) => {
-              const isActive = preset.id === presetId
+          <div className="mt-1 space-y-1">
+            <label className="font-mono text-[0.78rem] tracking-[0.05em] text-[#666666]">
+              Enter integers (comma or space separated)
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                className="min-w-0 flex-1 border border-[#E5E5E5] bg-white px-3 py-1.5 font-mono text-[0.86rem] text-[#111111] outline-none transition-colors focus:border-[#111111]"
+                onChange={(event) => {
+                  const nextDraft = event.target.value
+                  setDraft(nextDraft)
 
-              return (
-                <button
-                  key={preset.id}
-                  className={[
-                    'border px-2.5 py-1 font-mono text-[0.8rem] transition-colors',
-                    isActive
-                      ? 'border-[#111111] bg-[#111111] text-[#FAFAFA]'
-                      : 'border-[#E5E5E5] bg-white text-[#111111]',
-                  ].join(' ')}
-                  onClick={() => setPresetId(preset.id)}
-                  type="button"
-                >
-                  {preset.label}
-                </button>
-              )
-            })}
-          </div>
-          <div className="mt-1.5 font-mono text-[0.76rem] text-[#666666]">
-            values: [{selectedPreset.values.join(', ')}]
+                  const result = parseSortDataset(nextDraft, {
+                    maxLength: MAX_TOPIC02_SORT_DATASET_LENGTH,
+                    mode: 'comparison',
+                  })
+
+                  if (!result.ok) {
+                    setValidationError(result.error)
+                    return
+                  }
+
+                  setValidationError(null)
+                  setValues(result.values)
+                }}
+                type="text"
+                value={draft}
+              />
+              <button
+                className="border px-2.5 py-1 font-mono text-[0.8rem] transition-colors hover:border-[#111111]"
+                onClick={() => {
+                  const length =
+                    defaultValues.length > 0
+                      ? Math.min(defaultValues.length, MAX_TOPIC02_SORT_DATASET_LENGTH)
+                      : Math.min(8, MAX_TOPIC02_SORT_DATASET_LENGTH)
+                  const randomValues = Array.from({ length }, () => Math.floor(Math.random() * 99) + 1)
+                  setValidationError(null)
+                  setValues(randomValues)
+                  setDraft(randomValues.join(', '))
+                }}
+                type="button"
+              >
+                Random
+              </button>
+              <div className="font-mono text-[0.78rem] text-[#666666]">
+                count: {values.length}/{MAX_TOPIC02_SORT_DATASET_LENGTH}
+              </div>
+            </div>
+            {validationError !== null ? (
+              <div className="font-mono text-[0.78rem] text-[#B42318]">{validationError}</div>
+            ) : null}
           </div>
         </div>
 
@@ -492,7 +511,7 @@ function Topic02PartitionSelectionLab({
           <div className="border-t border-[#E5E5E5] px-4 py-3">
             <div className="font-mono text-[0.8rem] tracking-[0.06em] text-[#666666]">K RANK (1-BASED)</div>
             <div className="mt-2 flex flex-wrap gap-2">
-              {selectedPreset.values.map((_, index) => {
+              {values.map((_, index) => {
                 const rank = index + 1
                 const isActive = rank === boundedRank
 

@@ -310,6 +310,44 @@ type DynamicProgrammingAlgorithmId =
   | 'edit-distance'
   | 'maximum-subarray'
 
+type DynamicProgrammingSalesmanHouseInput = Readonly<{
+  algorithmId: 'salesman-house'
+  values: readonly number[]
+}>
+
+type DynamicProgrammingMazeBlockedCell = Readonly<{
+  rowIndex: number
+  columnIndex: number
+}>
+
+type DynamicProgrammingMazeInput = Readonly<{
+  algorithmId: 'maze'
+  size: number
+  blockedCells: readonly DynamicProgrammingMazeBlockedCell[]
+}>
+
+type DynamicProgrammingSequenceInput = Readonly<{
+  algorithmId: 'longest-increasing-subsequence' | 'maximum-subarray'
+  values: readonly number[]
+}>
+
+type DynamicProgrammingStringPairInput = Readonly<{
+  algorithmId: 'longest-common-subsequence' | 'edit-distance'
+  left: string
+  right: string
+}>
+
+type DynamicProgrammingInput =
+  | DynamicProgrammingSalesmanHouseInput
+  | DynamicProgrammingMazeInput
+  | DynamicProgrammingSequenceInput
+  | DynamicProgrammingStringPairInput
+
+type ParsedDynamicProgrammingInput = Readonly<{
+  input: DynamicProgrammingInput | null
+  errors: readonly string[]
+}>
+
 type DynamicProgrammingPseudocodeLine = Readonly<{
   lineNumber: number
   text: string
@@ -376,6 +414,7 @@ type DynamicProgrammingTimeline = Readonly<{
   pseudocodeLines: readonly DynamicProgrammingPseudocodeLine[]
   complexityProfile: DynamicProgrammingComplexityProfile
   presets: readonly DynamicProgrammingPreset[]
+  presetInputs: Readonly<Record<string, DynamicProgrammingInput>>
   activePresetId: string
   frames: readonly DynamicProgrammingFrame[]
 }>
@@ -684,6 +723,10 @@ export type {
   DynamicProgrammingMatrixRow,
   DynamicProgrammingMetric,
   DynamicProgrammingPanel,
+  DynamicProgrammingMazeBlockedCell,
+  DynamicProgrammingMazeInput,
+  DynamicProgrammingInput,
+  ParsedDynamicProgrammingInput,
   DynamicProgrammingPreset,
   DynamicProgrammingPseudocodeLine,
   DynamicProgrammingTimeline,

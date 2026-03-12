@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  MAX_COUNTING_SORT_VALUE,
+  MAX_RADIX_SORT_VALUE,
+} from '../../domain/algorithms/topic02SortLimits.ts'
+import {
   createAdvancedLineEvents,
   createAdvancedSortTimeline,
   getAdvancedFrameByLineEvent,
@@ -135,6 +139,57 @@ describe('advancedSortTimeline', () => {
 
     expect(countingTimeline.validationError).toMatch(/non-negative/)
     expect(radixTimeline.validationError).toMatch(/non-negative/)
+    expect(countingTimeline.frames).toHaveLength(1)
+    expect(radixTimeline.frames).toHaveLength(1)
+  })
+
+  it('counting sort rejects values above the configured max bucket cap', () => {
+    const input = [0, MAX_COUNTING_SORT_VALUE + 1]
+
+    const timeline = createAdvancedSortTimeline({
+      algorithmId: 'counting-sort',
+      values: input,
+      heapMode: 'sort-trace',
+      radixBase: 10,
+    })
+
+    expect(timeline.validationError).toMatch(/exceeds limit/i)
+    expect(timeline.frames).toHaveLength(1)
+  })
+
+  it('radix sort rejects values above the configured max input cap', () => {
+    const input = [0, MAX_RADIX_SORT_VALUE + 1]
+
+    const timeline = createAdvancedSortTimeline({
+      algorithmId: 'radix-sort',
+      values: input,
+      heapMode: 'sort-trace',
+      radixBase: 10,
+    })
+
+    expect(timeline.validationError).toMatch(/exceeds limit/i)
+    expect(timeline.frames).toHaveLength(1)
+  })
+
+  it('counting sort and radix sort reject non-integer values', () => {
+    const input = [3, 2.5, 1]
+
+    const countingTimeline = createAdvancedSortTimeline({
+      algorithmId: 'counting-sort',
+      values: input,
+      heapMode: 'sort-trace',
+      radixBase: 10,
+    })
+
+    const radixTimeline = createAdvancedSortTimeline({
+      algorithmId: 'radix-sort',
+      values: input,
+      heapMode: 'sort-trace',
+      radixBase: 2,
+    })
+
+    expect(countingTimeline.validationError).toMatch(/integer/i)
+    expect(radixTimeline.validationError).toMatch(/integer/i)
     expect(countingTimeline.frames).toHaveLength(1)
     expect(radixTimeline.frames).toHaveLength(1)
   })

@@ -6,27 +6,21 @@ import {
   elementarySortPresets,
   getFrameByLineEvent,
 } from '../../algorithms/array/elementarySortTimeline.ts'
+import { MAX_TOPIC02_SORT_DATASET_LENGTH } from '../../domain/algorithms/topic02SortLimits.ts'
 import type {
   ElementarySortAlgorithmId,
   SortCounters,
   SortFrame,
   SortPointers,
-  SortPresetId,
 } from '../../domain/algorithms/types.ts'
-
-const algorithmDirectoryLabel: Record<ElementarySortAlgorithmId, string> = {
-  'bubble-sort': 'BUBBLE SORT',
-  'selection-sort': 'SELECTION SORT',
-  'insertion-sort': 'INSERTION SORT',
-}
-
+import { parseSortDataset } from './sortDatasetInput.ts'
 const algorithmSubtitle: Record<ElementarySortAlgorithmId, string> = {
   'bubble-sort': 'adjacent compare-and-swap passes with early-exit behavior',
   'selection-sort': 'global minimum scan per pass with one final placement swap',
   'insertion-sort': 'sorted-prefix growth via left shifts and key insertion',
 }
 
-const defaultPresetId: SortPresetId = 'with-duplicates'
+const defaultValues = elementarySortPresets[0]?.values ?? []
 const animationMs = 280
 const cellWidthPx = 56
 
@@ -188,17 +182,15 @@ function Topic02ElementarySortLab({
 }: Readonly<{
   algorithmId: ElementarySortAlgorithmId
 }>) {
-  const [presetId, setPresetId] = useState<SortPresetId>(defaultPresetId)
+  const [values, setValues] = useState<readonly number[]>(() => [...defaultValues])
+  const [draft, setDraft] = useState(() => defaultValues.join(', '))
+  const [validationError, setValidationError] = useState<string | null>(null)
   const [lineEventIndex, setLineEventIndex] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
 
-  const selectedPreset =
-    elementarySortPresets.find((preset) => preset.id === presetId) ??
-    elementarySortPresets[0]
-
   const timeline = useMemo(
-    () => createElementarySortTimeline(algorithmId, selectedPreset.values),
-    [algorithmId, selectedPreset.values],
+    () => createElementarySortTimeline(algorithmId, values),
+    [algorithmId, values],
   )
 
   const lineEvents = useMemo(() => createLineEvents(timeline.frames), [timeline.frames])
@@ -258,7 +250,7 @@ function Topic02ElementarySortLab({
   useEffect(() => {
     setIsPlaying(false)
     setLineEventIndex(0)
-  }, [algorithmId, presetId])
+  }, [algorithmId, values])
 
   useEffect(() => {
     if (!isPlaying) {
@@ -312,6 +304,25 @@ function Topic02ElementarySortLab({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [hasLineEvents, lineEventIndex, lastLineEventIndex])
 
+  const applyDraft = () => {
+    const result = parseSortDataset(draft, {
+      maxLength: MAX_TOPIC02_SORT_DATASET_LENGTH,
+      mode: 'comparison',
+    })
+    if (!result.ok) {
+      setValidationError(result.error)
+      return
+    }
+    setValidationError(null)
+    setValues(result.values)
+  }
+
+  const applyPreset = (presetValues: readonly number[]) => {
+    setValidationError(null)
+    setValues(presetValues)
+    setDraft(presetValues.join(', '))
+  }
+
   return (
     <section className="mt-4 space-y-4">
       <div className="space-y-3">
@@ -337,25 +348,11 @@ function Topic02ElementarySortLab({
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
             <button
-              className="border border-[#111111] bg-white px-2.5 py-1 font-mono text-[0.82rem] text-[#111111] transition-colors hover:bg-[#111111] hover:text-[#FAFAFA]"
-              onClick={goToPreviousLine}
-              type="button"
-            >
-              Previous
-            </button>
-            <button
               className="border border-[#111111] bg-[#111111] px-2.5 py-1 font-mono text-[0.82rem] text-[#FAFAFA] transition-colors hover:bg-white hover:text-[#111111]"
               onClick={togglePlay}
               type="button"
             >
               {isPlaying ? 'Pause' : 'Play'}
-            </button>
-            <button
-              className="border border-[#111111] bg-white px-2.5 py-1 font-mono text-[0.82rem] text-[#111111] transition-colors hover:bg-[#111111] hover:text-[#FAFAFA]"
-              onClick={goToNextLine}
-              type="button"
-            >
-              Next
             </button>
             <button
               className="border border-[#E5E5E5] bg-white px-2.5 py-1 font-mono text-[0.82rem] text-[#111111] transition-colors hover:border-[#111111]"
@@ -368,32 +365,58 @@ function Topic02ElementarySortLab({
         </div>
 
         <div className="border-t border-[#E5E5E5] px-4 py-3">
-          <div className="font-mono text-[0.8rem] tracking-[0.06em] text-[#666666]">
-            DATASET PRESET
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {elementarySortPresets.map((preset) => {
-              const isActive = preset.id === presetId
+          <div className="mt-3 space-y-1">
+            <label className="font-mono text-[0.78rem] tracking-[0.05em] text-[#666666]">
+              Enter integers (comma or space separated)
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                className="min-w-0 flex-1 border border-[#E5E5E5] bg-white px-3 py-1.5 font-mono text-[0.86rem] text-[#111111] outline-none transition-colors focus:border-[#111111]"
+                onChange={(event) => {
+                  const nextDraft = event.target.value
+                  setDraft(nextDraft)
 
-              return (
-                <button
-                  key={preset.id}
-                  className={[
-                    'border px-2.5 py-1 font-mono text-[0.8rem] transition-colors',
-                    isActive
-                      ? 'border-[#111111] bg-[#111111] text-[#FAFAFA]'
-                      : 'border-[#E5E5E5] bg-white text-[#111111]',
-                  ].join(' ')}
-                  onClick={() => setPresetId(preset.id)}
-                  type="button"
-                >
-                  {preset.label}
-                </button>
-              )
-            })}
-          </div>
-          <div className="mt-1.5 font-mono text-[0.76rem] text-[#666666]">
-            values: [{selectedPreset.values.join(', ')}]
+                  const result = parseSortDataset(nextDraft, {
+                    maxLength: MAX_TOPIC02_SORT_DATASET_LENGTH,
+                    mode: 'comparison',
+                  })
+
+                  if (!result.ok) {
+                    setValidationError(result.error)
+                    return
+                  }
+
+                  setValidationError(null)
+                  setValues(result.values)
+                }}
+                type="text"
+                value={draft}
+              />
+              <button
+                className="border px-2.5 py-1 font-mono text-[0.8rem] transition-colors hover:border-[#111111]"
+                onClick={() => {
+                  const length =
+                    defaultValues.length > 0
+                      ? Math.min(defaultValues.length, MAX_TOPIC02_SORT_DATASET_LENGTH)
+                      : Math.min(8, MAX_TOPIC02_SORT_DATASET_LENGTH)
+                  const randomValues = Array.from({ length }, () =>
+                    Math.floor(Math.random() * 99) + 1,
+                  )
+                  setValidationError(null)
+                  setValues(randomValues)
+                  setDraft(randomValues.join(', '))
+                }}
+                type="button"
+              >
+                Random
+              </button>
+              <div className="font-mono text-[0.78rem] text-[#666666]">
+                count: {values.length}/{MAX_TOPIC02_SORT_DATASET_LENGTH}
+              </div>
+            </div>
+            {validationError !== null ? (
+              <div className="font-mono text-[0.78rem] text-[#B42318]">{validationError}</div>
+            ) : null}
           </div>
         </div>
 

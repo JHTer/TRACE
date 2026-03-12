@@ -9,25 +9,19 @@ import {
   heapModeOptions,
   radixBaseOptions,
 } from '../../algorithms/array/advancedSortTimeline.ts'
+import { MAX_TOPIC02_SORT_DATASET_LENGTH } from '../../domain/algorithms/topic02SortLimits.ts'
 import type {
   AdvancedSortCounters,
   AdvancedSortFrame,
   HeapInstructionModeId,
   RadixBase,
-  SortPresetId,
   Topic02AdvancedSortAlgorithmId,
 } from '../../domain/algorithms/types.ts'
+import { parseSortDataset } from './sortDatasetInput.ts'
 
-const defaultPresetId: SortPresetId = 'with-duplicates'
 const defaultHeapMode: HeapInstructionModeId = 'sort-trace'
 const defaultRadixBase: RadixBase = 10
 const animationMs = 280
-
-const algorithmDirectoryLabel: Record<Topic02AdvancedSortAlgorithmId, string> = {
-  heapsort: 'HEAPSORT',
-  'counting-sort': 'COUNTING SORT',
-  'radix-sort': 'RADIX SORT',
-}
 
 const algorithmSubtitle: Record<Topic02AdvancedSortAlgorithmId, string> = {
   heapsort:
@@ -743,26 +737,26 @@ function Topic02AdvancedSortLab({
 }: Readonly<{
   algorithmId: Topic02AdvancedSortAlgorithmId
 }>) {
-  const [presetId, setPresetId] = useState<SortPresetId>(defaultPresetId)
+  const presetsForAlgorithm = advancedSortPresetsByAlgorithm[algorithmId]
+  const initialValues = presetsForAlgorithm[0]?.values ?? []
+
+  const [values, setValues] = useState<readonly number[]>(() => [...initialValues])
+  const [draft, setDraft] = useState(() => initialValues.join(', '))
+  const [validationError, setValidationError] = useState<string | null>(null)
   const [heapMode, setHeapMode] = useState<HeapInstructionModeId>(defaultHeapMode)
   const [radixBase, setRadixBase] = useState<RadixBase>(defaultRadixBase)
   const [lineEventIndex, setLineEventIndex] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
 
-  const presetsForAlgorithm = advancedSortPresetsByAlgorithm[algorithmId]
-  const selectedPreset =
-    presetsForAlgorithm.find((preset) => preset.id === presetId) ??
-    presetsForAlgorithm[0]
-
   const timeline = useMemo(
     () =>
       createAdvancedSortTimeline({
         algorithmId,
-        values: selectedPreset.values,
+        values,
         heapMode,
         radixBase,
       }),
-    [algorithmId, heapMode, radixBase, selectedPreset.values],
+    [algorithmId, heapMode, radixBase, values],
   )
 
   const lineEvents = useMemo(
@@ -782,6 +776,12 @@ function Topic02AdvancedSortLab({
   const activeLine = activeEvent?.lineNumber ?? timeline.pseudocodeLines[0]?.lineNumber ?? 1
   const frameProgress = (activeEvent?.frameIndex ?? 0) + 1
   const totalFrames = Math.max(1, timeline.frames.length)
+  const datasetMode: 'comparison' | 'counting' | 'radix' =
+    algorithmId === 'heapsort'
+      ? 'comparison'
+      : algorithmId === 'counting-sort'
+        ? 'counting'
+        : 'radix'
 
   const goToPreviousLine = () => {
     setIsPlaying(false)
@@ -819,7 +819,14 @@ function Topic02AdvancedSortLab({
   useEffect(() => {
     setIsPlaying(false)
     setLineEventIndex(0)
-  }, [algorithmId, heapMode, presetId, radixBase])
+  }, [algorithmId, heapMode, radixBase, values])
+
+  useEffect(() => {
+    const resetValues = presetsForAlgorithm[0]?.values ?? []
+    setValues(resetValues)
+    setDraft(resetValues.join(', '))
+    setValidationError(null)
+  }, [algorithmId, presetsForAlgorithm])
 
   useEffect(() => {
     if (!isPlaying) {
@@ -929,30 +936,57 @@ function Topic02AdvancedSortLab({
         </div>
 
         <div className="border-t border-[#E5E5E5] px-4 py-3">
-          <div className="font-mono text-[0.8rem] tracking-[0.06em] text-[#666666]">DATASET PRESET</div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {presetsForAlgorithm.map((preset) => {
-              const isActive = preset.id === presetId
+          <div className="mt-1 space-y-1">
+            <label className="font-mono text-[0.78rem] tracking-[0.05em] text-[#666666]">
+              Enter integers (comma or space separated)
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                className="min-w-0 flex-1 border border-[#E5E5E5] bg-white px-3 py-1.5 font-mono text-[0.86rem] text-[#111111] outline-none transition-colors focus:border-[#111111]"
+                onChange={(event) => {
+                  const nextDraft = event.target.value
+                  setDraft(nextDraft)
 
-              return (
-                <button
-                  key={preset.id}
-                  className={[
-                    'border px-2.5 py-1 font-mono text-[0.8rem] transition-colors',
-                    isActive
-                      ? 'border-[#111111] bg-[#111111] text-[#FAFAFA]'
-                      : 'border-[#E5E5E5] bg-white text-[#111111]',
-                  ].join(' ')}
-                  onClick={() => setPresetId(preset.id)}
-                  type="button"
-                >
-                  {preset.label}
-                </button>
-              )
-            })}
-          </div>
-          <div className="mt-1.5 font-mono text-[0.76rem] text-[#666666]">
-            values: [{selectedPreset.values.join(', ')}]
+                  const result = parseSortDataset(nextDraft, {
+                    maxLength: MAX_TOPIC02_SORT_DATASET_LENGTH,
+                    mode: datasetMode,
+                  })
+
+                  if (!result.ok) {
+                    setValidationError(result.error)
+                    return
+                  }
+
+                  setValidationError(null)
+                  setValues(result.values)
+                }}
+                type="text"
+                value={draft}
+              />
+              <button
+                className="border px-2.5 py-1 font-mono text-[0.8rem] transition-colors hover:border-[#111111]"
+                onClick={() => {
+                  const baseLength = presetsForAlgorithm[0]?.values.length ?? values.length ?? 0
+                  const length =
+                    baseLength > 0
+                      ? Math.min(baseLength, MAX_TOPIC02_SORT_DATASET_LENGTH)
+                      : Math.min(8, MAX_TOPIC02_SORT_DATASET_LENGTH)
+                  const randomValues = Array.from({ length }, () => Math.floor(Math.random() * 99) + 1)
+                  setValidationError(null)
+                  setValues(randomValues)
+                  setDraft(randomValues.join(', '))
+                }}
+                type="button"
+              >
+                Random
+              </button>
+              <div className="font-mono text-[0.78rem] text-[#666666]">
+                count: {values.length}/{MAX_TOPIC02_SORT_DATASET_LENGTH}
+              </div>
+            </div>
+            {validationError !== null ? (
+              <div className="font-mono text-[0.78rem] text-[#B42318]">{validationError}</div>
+            ) : null}
           </div>
         </div>
 
