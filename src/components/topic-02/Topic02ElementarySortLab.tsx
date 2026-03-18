@@ -58,8 +58,46 @@ function ArrayStrip({ frame }: Readonly<{ frame: SortFrame }>) {
   const activeIndices = useMemo(() => new Set(frame.activeIndices), [frame.activeIndices])
   const nodeByIdRef = useRef<Record<string, HTMLDivElement | null>>({})
   const previousRectByIdRef = useRef<Record<string, DOMRect>>({})
+  const animationFrameIdsRef = useRef<number[]>([])
+  const cleanupTimeoutIdRef = useRef<number | null>(null)
 
   useLayoutEffect(() => {
+    const stopNodeAnimation = (node: HTMLDivElement | null | undefined) => {
+      if (node === null || node === undefined) {
+        return
+      }
+
+      node.style.transition = 'none'
+      node.style.transform = ''
+      node.style.willChange = ''
+      node.style.zIndex = ''
+    }
+
+    const clearNodeAnimationStyles = (node: HTMLDivElement | null | undefined) => {
+      if (node === null || node === undefined) {
+        return
+      }
+
+      node.style.transition = ''
+      node.style.transform = ''
+      node.style.willChange = ''
+      node.style.zIndex = ''
+    }
+
+    if (cleanupTimeoutIdRef.current !== null) {
+      window.clearTimeout(cleanupTimeoutIdRef.current)
+      cleanupTimeoutIdRef.current = null
+    }
+
+    animationFrameIdsRef.current.forEach((animationFrameId) => {
+      window.cancelAnimationFrame(animationFrameId)
+    })
+    animationFrameIdsRef.current = []
+
+    frame.items.forEach((item) => {
+      stopNodeAnimation(nodeByIdRef.current[item.id])
+    })
+
     const nextRectById: Record<string, DOMRect> = {}
 
     frame.items.forEach((item) => {
@@ -96,27 +134,37 @@ function ArrayStrip({ frame }: Readonly<{ frame: SortFrame }>) {
       node.style.willChange = 'transform'
       node.style.zIndex = '3'
 
-      window.requestAnimationFrame(() => {
+      const animationFrameId = window.requestAnimationFrame(() => {
         node.style.transition = `transform ${animationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`
         node.style.transform = 'translate(0, 0)'
       })
+      animationFrameIdsRef.current.push(animationFrameId)
     })
 
-    const cleanupTimeoutId = window.setTimeout(() => {
+    cleanupTimeoutIdRef.current = window.setTimeout(() => {
       frame.items.forEach((item) => {
-        const node = nodeByIdRef.current[item.id]
-        if (node !== null && node !== undefined) {
-          node.style.transition = ''
-          node.style.transform = ''
-          node.style.willChange = ''
-          node.style.zIndex = ''
-        }
+        clearNodeAnimationStyles(nodeByIdRef.current[item.id])
       })
+      cleanupTimeoutIdRef.current = null
     }, animationMs + 40)
 
     previousRectByIdRef.current = nextRectById
 
-    return () => window.clearTimeout(cleanupTimeoutId)
+    return () => {
+      if (cleanupTimeoutIdRef.current !== null) {
+        window.clearTimeout(cleanupTimeoutIdRef.current)
+        cleanupTimeoutIdRef.current = null
+      }
+
+      animationFrameIdsRef.current.forEach((animationFrameId) => {
+        window.cancelAnimationFrame(animationFrameId)
+      })
+      animationFrameIdsRef.current = []
+
+      frame.items.forEach((item) => {
+        clearNodeAnimationStyles(nodeByIdRef.current[item.id])
+      })
+    }
   }, [frame.items])
 
   return (
